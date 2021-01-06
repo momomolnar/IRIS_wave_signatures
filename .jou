@@ -1,7 +1,12 @@
 ; IDL Version 8.5.1, Mac OS X (darwin x86_64 m64)
-; Journal File for molnarad@cu-genvpn-comp-10.180.1.145.int.colorado.edu
+; Journal File for molnarad@cu-nso-wrls-172.25.17.179.int.colorado.edu
 ; Working directory: /Users/molnarad/CU_Boulder/Work/Chromospheric_business/IRIS_waves/code
-; Date: Mon Nov  2 22:55:13 2020
+; Date: Tue Jan  5 16:25:54 2021
  
 ;!d.n_colors=    16777216
-.r iris_get_mg_features_lev2
+.r write_mg2_features
+; % Array dimensions must be greater than 0.
+mg2_features
+; % Array dimensions must be greater than 0.
+.r write_mg2_features
+; % Array dimensions must be greater than 0.

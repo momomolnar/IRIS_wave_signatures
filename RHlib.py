@@ -9,7 +9,7 @@ Created on Tue Oct 15 13:47:55 2019
 
 import numpy as np
 import scipy as sp
-import radynpy as rp
+#import radynpy as rp
 import matplotlib.pyplot as plt
 import astropy.io.fits as fits
 
