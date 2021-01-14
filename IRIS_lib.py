@@ -19,15 +19,32 @@ import scipy as sp
 
 from RHlib import calc_v_lc
 
+pl.style.use('science')
+
 def remove_nans(array):
-    
+    """
+    Remove Nans from an array
+
+    Parameters
+    ----------
+    array : ndarray
+        Input array;
+
+    Returns
+    -------
+    array : ndarray
+        Filtered array;
+
+    """
+    array1 = array.copy()
     median_array = np.mean(np.ma.masked_invalid(array))
+    print(median_array)
     for ii in range(array.shape[0]):
         for jj in range(array.shape[1]):
             if np.isnan(array[ii, jj]) == True:
-                array[ii, jj] = median_array
+                array1[ii, jj] = median_array
     
-    return array
+    return array1
 
 def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
     """
@@ -54,11 +71,9 @@ def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
         DESCRIPTION.
 
     """
-    
-    vel_field = correct_IRIS_noisy_maps(vel_field, dv)
-    print(np.sum(np.isnan(vel_field)))
     vel_field = remove_nans(vel_field)
-    print(np.sum(np.isnan(vel_field)))
+
+    vel_field = correct_IRIS_noisy_maps(vel_field, dv)
 
     vel_field = detrend_data(vel_field)
     vel_field = average_velmap_slitwise(vel_field, dd)
@@ -105,7 +120,7 @@ def average_velmap_slitwise(vel_map, av_num=4):
     Returns
     -------
     velmap_average : ndarray [n_slit_pixels/av_num]
-        Averaged map
+        Averaged map over the slit dimension.
 
     """
     
@@ -149,7 +164,7 @@ def plot_velocity_map(vel_map, aspect=.2, title="",
     pl.figure(dpi=250)    
     im1 = pl.imshow(vel_map - np.mean(np.ma.masked_invalid(vel_map)), 
                     vmin=vmin, vmax=vmax, cmap="bwr", aspect=aspect, 
-                    extent=[0, vel_map.shape[1], 0, vel_map.shape[0]*17])
+                    extent=[0, vel_map.shape[1], 0, vel_map.shape[0]*cadence])
     pl.colorbar(im1, label="Doppler Velocity [km/s]", shrink=1)
     pl.xlabel("Pixels across the slit")
     pl.ylabel("Time [s]")
@@ -187,7 +202,7 @@ def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="",
     """
     int_map = np.swapaxes(int_map, 0, 1)
     pl.figure(dpi=250)    
-    im1 = pl.imshow(int_map - np.mean(np.ma.masked_invalid(int_map)), 
+    im1 = pl.imshow(int_map, 
                     vmin=vmin, vmax=vmax, cmap="plasma", aspect=aspect, 
                     extent=[0, int_map.shape[1], 0, int_map.shape[0]*cadence])
     pl.colorbar(im1, label="Intensity [Arbitrary units]", shrink=1)
@@ -198,17 +213,55 @@ def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="",
 
     pl.show()
     
-def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5):
+def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
+                remove_noise=False, freq_range=[0, 20]):
+    """
+    Plot the Power spectrum of 2D slice (location along slit vs frequency).
+
+    Parameters
+    ----------
+    freq : ndarray [Nfreq]
+        Frequency
+    Pxx : ndarray [Nfreq, nX]
+        DESCRIPTION.
+    aspect : TYPE, optional
+        DESCRIPTION. The default is .2.
+    title : str
+        Title of the plot. The default is "".
+    d : str
+        Where the plot to be saved. The default is "".
+    vmina : float
+        Vmin for the colorscale. The default is -3.
+    vmaxa : float
+        Vmax for the colorscale. The default is .5.
+    remove_noise: bool, optional
+        Remove the white noise level based on the last 15 frequency pixels.
+        The default is True.
+    freq_range: [freq_min, freq_max], optional
+        Frequency range to be plotted in mHz. The default is [0, 20] mHz.
+
+    Returns
+    -------
+    None.
+
+    """
     
     pl.figure(dpi=250)
+    Pxx_nx = Pxx.shape[0]
+    if remove_noise == True:
+        noise_est = np.array([np.mean(el[-5:-1]) for el in Pxx])
+        print(noise_est)
+        for el in range(Pxx_nx):
+            Pxx[el, :] -= noise_est[el] 
     im1 = pl.imshow(np.log10(Pxx).T-3, vmin=vmina, vmax=vmaxa, aspect=aspect,
                     extent=[0, Pxx.shape[0], freq[-1]*1e3, 0])
     pl.xlabel("Pixels along the slit")
     pl.ylabel("Frequency [mHz]")
     
-    pl.colorbar(im1, label="Log10[Acoustic power [(km/s)$^2$/mHz]]",
+    pl.colorbar(im1, label="Log10[Acoustic power [(km/s)$^2$/mHz]",
                 shrink=.8)
     pl.title(title)
+    pl.ylim(freq_range[1], freq_range[0])
     pl.savefig(d+title+".png", transparent=True)
     pl.show()
 
@@ -231,7 +284,7 @@ def calc_mask(v_array, dv):
 
 def calc_Pxx_velmap(vel_map, fsi=1/17):
     """
-    
+    Calculate the power spectrum of a map from a velocity time series.
 
     Parameters
     ----------
