@@ -25,9 +25,10 @@ file_name = ["../IRIS_data/CH_data/CH_vel_mgk_mu=0.99.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.83.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.75.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.65.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",]
+             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",
+             "../IRIS_data/QS_data/iris_l2_20131116_073345_3803010103_raster_t000_r00000_mg2_vel.sav"]
 
-file_index = 2
+file_index = -1
 file_name = file_name[file_index]
 mu_angle = file_name[-8:-4]
 print(f"The mu angle is {mu_angle}")

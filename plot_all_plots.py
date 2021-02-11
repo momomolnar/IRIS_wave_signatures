@@ -16,11 +16,12 @@ from IRIS_lib import calc_Pxx_velmap, plot_Pxx_2D
 file_name = ["../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.2.sav",
              "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.4.sav",
              "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.8.sav",
-             "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=1.0.sav"]
+             "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=1.0.sav",
+             "../IRIS_data/QS_data/iris_l2_20131116_073345_3803010103_raster_t000_r00000_mg2_vel.sav"]
 
-d= "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/Mettings_with_Steve/2021_01_08/"
+d= "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/Meetings_with_Steve/2021_01_21/"
 
-file_name = file_name[0]
+file_name = file_name[-1]
 mu_angle = file_name[-7:-4]
 print(f"The mu angle is {mu_angle}")
 
@@ -32,8 +33,8 @@ slit_av_param = 3
 asp= 0.075*3/dd_param
 asp_pxx = 5/dd_param*6
 
-t_limits = [1, -2]
-slit_limits = [10, -100]
+t_limits = [0, -1]
+slit_limits = [0, -1]
 
 k_2v_v = filter_velocity_field(bp[t_limits[0]:t_limits[1], 
                                   slit_limits[0]:slit_limits[1], 0, 0], dd=dd_param)
