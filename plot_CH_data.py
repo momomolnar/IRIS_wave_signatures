@@ -19,11 +19,11 @@ file_name = ["../IRIS_data/CH_data/CH_vel_mgk_mu=0.99.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.75.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.65.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",]
-file_index = 3
+file_index = -2
 file_name = file_name[file_index]
 mu_angle = file_name[-8:-4]
 print(f"The mu angle is {mu_angle}")
-d= "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/Mettings_with_Steve/2021_01_05/"
+d= "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/Meetings_with_Steve/2021_02_18/"
 
 cadence = [9.47, 16.39, 9.33, 9.33, 16.21, 9.57]
 dt      = cadence[file_index]
@@ -36,8 +36,8 @@ dd_param = 1
 slit_av_param = 1
 
 
-asp= 0.075/dd_param*.5
-asp_pxx = 5/dd_param*2.5
+asp= "auto" # 0.075/dd_param/2
+asp_pxx = "auto" # 5/dd_param*5
 
 t_limits = [1, -2]
 slit_limits = [10,-100]

@@ -24,13 +24,16 @@ sav_data = readsav(data_dir + file_name)
 
 iris_data = sav_data["iris_SJI_fin"]
 
-for el in range(0, 226):
+for el in range(0, 1):
     pl.figure(dpi=250)
-    pl.imshow(iris_data[el, :, :], vmax=60, vmin=10, origin="lower",
+    pl.imshow(iris_data[el, :, :], vmax=80, vmin=2, origin="lower",
               extent=[-127.98, -31.98, 210.99, 306.99])
-    pl.title(f"Frame number {el} / {6.32*8*el:.1f} seconds")
+    time = int(6.32*8*el)
+    pl.title(f"Frame {el:{0}{3}} / {time:{0}{5}} sec")
     pl.tight_layout()
-    pl.savefig((data_dir+"SJI_movie_frames/frame_" + "{0:0=2d}".format(el)
+    pl.savefig((data_dir+"SJI_movie_frames/frame_" + "{0:0=3d}".format(el)
                 + ".jpg"), transparent=True)
+    pl.ylabel("Solar Y [arcsec]")
+    pl.xlabel("Solar X [arcsec]")
     pl.show()
 

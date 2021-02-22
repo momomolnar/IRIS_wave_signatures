@@ -16,12 +16,13 @@ from astropy.io import fits
 import matplotlib.pyplot as pl
 from scipy.io import readsav
 import scipy as sp
+from scipy.signal import correlate
 
 from RHlib import calc_v_lc
 
 pl.style.use('science')
 
-def remove_nans(array):
+def remove_nans(array, replace="median", print_replacement = False):
     """
     Remove Nans from an array
 
@@ -29,7 +30,10 @@ def remove_nans(array):
     ----------
     array : ndarray
         Input array;
-
+    replace: float, Optional
+        Replacement for the NaNs; Default is median of the array
+    print_replacement: Bool, Optional
+        Flag to print the replacement value. Default is False.
     Returns
     -------
     array : ndarray
@@ -37,12 +41,14 @@ def remove_nans(array):
 
     """
     array1 = array.copy()
-    median_array = np.mean(np.ma.masked_invalid(array))
-    print(median_array)
+    if replace=="median":
+        replace = np.mean(np.ma.masked_invalid(array))
+    if print_replacement == True:
+        print(f"Replacement for the array is: {replace}")
     for ii in range(array.shape[0]):
         for jj in range(array.shape[1]):
             if np.isnan(array[ii, jj]) == True:
-                array1[ii, jj] = median_array
+                array1[ii, jj] = replace
     
     return array1
 
@@ -50,20 +56,22 @@ def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
     """
     Filter raw velocity map from IDL input
     by doing the following three steps:
+        0) Replace NaNs with the median of the array;
         1) remove single jumps in the velocity maps by
         averaging over them;
-        2) remove Nans from the maps;
+        2) Remove longterm trends along the temporal direction without
+        by removing a polynomial of degree <degree>.
         3) average in the horizontal direction;
     Parameters
     ----------
     vel_field : ndarray()
         DESCRIPTION.
-    dv : TYPE, optional
-        DESCRIPTION. The default is 8.
-    dd : TYPE, optional
-        DESCRIPTION. The default is 4.
-    degree : TYPE, optional
-        DESCRIPTION. The default is 2.
+    dv : int, optional
+        Velocity jump over which to renormaliza The default is 8.
+    dd : int, optional
+        Averaging over the slit dimension. The default is 4.
+    degree : int, optional
+        Degree of the polynomial to be removed from the data. The default is 2.
 
     Returns
     -------
@@ -98,8 +106,8 @@ def average_every(array, dd=4):
 
     """
     
-    bb = [np.median(array[ii*dd:ii*dd+dd]) for ii 
-          in range(len(array)//dd-1)]
+    bb = [np.median(array[ii:(ii+dd)]) for ii 
+          in range(len(array)-1)]
     averaged_array = np.array(bb)
     
     return averaged_array
@@ -401,7 +409,7 @@ def correct_IRIS_noisy_series(timeSeries, dd):
     Parameters
     ----------
     timeSeries : ndarray [n_timesteps]
-        DESCRIPTION.
+        Input data.
     dd : float
         Threshold over which to interpolate
 
@@ -523,3 +531,27 @@ def detrend_data(timeSeries, dd=2):
     
     return timeSeries_detrend
  
+def find_lag(timeSeries1, timeSeries2):
+    """
+    Calculate what is the lag between two time series based on their xcorrela-
+    tion (computed with Scipy)
+
+    Parameters
+    ----------
+    timeSeries1 : ndarray [Nt] 
+        Timeseries 1
+    timeSeries2 : ndarray [Nt]
+        Timeseries 2
+
+    Returns
+    -------
+    time_lag : float
+        Lag between the two timeseries [measured in indices]
+
+    """
+    
+    cor = correlate(timeSeries1, timeSeries2, mode="same")
+    lag = np.argmax(cor)
+    time_lag = lag - len(timeSeries1)/2
+    
+    return time_lag

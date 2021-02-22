@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as pl
 from matplotlib.image import NonUniformImage
 
+from scipy import io
+
 from IRIS_lib import filter_velocity_field, load_velocity_mg2, plot_velocity_map
 from IRIS_lib import plot_intensity_map, average_velmap_slitwise
 from IRIS_lib import calc_Pxx_velmap, plot_Pxx_2D
@@ -27,7 +29,9 @@ file_name = ["../IRIS_data/CH_data/CH_vel_mgk_mu=0.99.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",]
 
 file_index = 2
+
 file_name = file_name[file_index]
+
 mu_angle = file_name[-8:-4]
 print(f"The mu angle is {mu_angle}")
 d= ("/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/"
