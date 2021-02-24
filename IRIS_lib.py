@@ -18,6 +18,9 @@ from scipy.io import readsav
 import scipy as sp
 from scipy.signal import correlate
 
+import pycwt as wavelet
+from pycwt.helpers import find
+
 from RHlib import calc_v_lc
 
 pl.style.use('science')
@@ -56,16 +59,18 @@ def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
     """
     Filter raw velocity map from IDL input
     by doing the following three steps:
-        0) Replace NaNs with the median of the array;
+        0) Replace NaNs with something very small and then remove those 
+        really small numbers with the median of 3x3 kernel
         1) remove single jumps in the velocity maps by
         averaging over them;
         2) Remove longterm trends along the temporal direction without
         by removing a polynomial of degree <degree>.
         3) average in the horizontal direction;
+    
     Parameters
     ----------
     vel_field : ndarray()
-        DESCRIPTION.
+        Input velocity field to be filtered.
     dv : int, optional
         Velocity jump over which to renormaliza The default is 8.
     dd : int, optional
@@ -79,12 +84,43 @@ def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
         DESCRIPTION.
 
     """
-    vel_field = remove_nans(vel_field)
+    
+    filter_value = -30
+    vel_field = np.array(vel_field)
+    
+    vel_field[np.isnan(vel_field)] = filter_value
+    vel_field = remove_nanvalues(vel_field, filter_value=filter_value)
 
     vel_field = correct_IRIS_noisy_maps(vel_field, dv)
 
     vel_field = detrend_data(vel_field)
     vel_field = average_velmap_slitwise(vel_field, dd)
+    
+    return vel_field
+
+def remove_nanvalues(vel_field, filter_value=-400):
+    """
+    Remove the very negative numbers from our array that were NaNs 
+
+    Parameters
+    ----------
+    vel_field : ndarray [nX, nY]
+        Velocity field to be filtered. 
+    filter_value: int
+        Negative value to be removed from the array
+
+    Returns
+    -------
+    vel_field : ndarray [nX, nY]
+        Filtered velocity field
+
+    """
+    
+    for ii in range(4, vel_field.shape[0]-4):
+        for jj in range(4, vel_field.shape[1]-4):
+            if vel_field[ii, jj] <= filter_value:
+                vel_field[ii,jj] = 0
+                vel_field[ii, jj] = np.median(vel_field[ii-3:ii+3, jj-3:jj+3])
     
     return vel_field
 
@@ -222,7 +258,7 @@ def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="",
     pl.show()
     
 def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
-                remove_noise=False, freq_range=[0, 20]):
+                remove_noise=False, freq_range=[]):
     """
     Plot the Power spectrum of 2D slice (location along slit vs frequency).
 
@@ -246,7 +282,7 @@ def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
         Remove the white noise level based on the last 15 frequency pixels.
         The default is True.
     freq_range: [freq_min, freq_max], optional
-        Frequency range to be plotted in mHz. The default is [0, 20] mHz.
+        Frequency range to be plotted in mHz. The default is no frequency range.
 
     Returns
     -------
@@ -257,7 +293,7 @@ def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
     pl.figure(dpi=250)
     Pxx_nx = Pxx.shape[0]
     if remove_noise == True:
-        noise_est = np.array([np.mean(el[-5:-1]) for el in Pxx])
+        noise_est = np.array([np.amin(el[-5:-1]) for el in Pxx])
         print(noise_est)
         for el in range(Pxx_nx):
             Pxx[el, :] -= noise_est[el] 
@@ -269,7 +305,7 @@ def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
     pl.colorbar(im1, label="Log10[Acoustic power [(km/s)$^2$/mHz]",
                 shrink=.8)
     pl.title(title)
-    pl.ylim(freq_range[1], freq_range[0])
+    # pl.ylim(freq_range[1], freq_range[0])
     pl.savefig(d+title+".png", transparent=True)
     pl.show()
 
@@ -555,3 +591,194 @@ def find_lag(timeSeries1, timeSeries2):
     time_lag = lag - len(timeSeries1)/2
     
     return time_lag
+
+def convert_cart_to_polar(x, y):
+    """
+    Convert Cartesian [x,y] to polar coordinates [r, theta]
+
+    Parameters
+    ----------
+    x : TYPE
+        DESCRIPTION.
+    y : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    r : TYPE
+        DESCRIPTION.
+    theta : TYPE
+        DESCRIPTION.
+
+    """
+    
+    r     = np.sqrt(x*x + y*y)
+    if y > 0:
+        theta = np.arccos(x/r)
+    else:
+        theta = -1 * np.arccos(x/r)
+  
+    return r, theta
+
+def convert_polar_to_cart(coords):
+    x = coords[0] * np.cos(coords[1])
+    y = coords[0] * np.sin(coords[1])
+
+    return [x, y]
+
+
+def angle_mean(angles):
+    """
+    Calculate the mean of a distribution of angles
+    using the unit circle averaging.
+    
+    Parameters
+    ----------
+    angles : ndarray [num_angles]
+        Input Angles array.
+
+    Returns
+    -------
+    mean_angle : float
+        The mean angle.
+
+    """
+    
+    num_angles = len(angles)
+    r = np.ones(num_angles)
+    
+    xy_array = [convert_polar_to_cart(el) for el in 
+                zip(r, angles)]
+    
+    xy_array = np.array(xy_array)
+    x_mean = np.mean(xy_array[:, 0])
+    y_mean = np.mean(xy_array[:, 1])
+    
+    r, mean_angle = convert_cart_to_polar(x_mean, y_mean)
+    return mean_angle
+
+
+def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0, 
+                    use_cache=False):
+    """
+    Compute the phase between two signals (timeSeries1 and timeSeries2) based 
+    on their coherence on Morlet wavelet analysis. Tailored for IRIS level 2 
+    data.
+
+    Parameters
+    ----------
+    timeSeries1 : ndarray [num_tSteps]
+        Timeseries 1
+    timeSeries2 : ndarray [num_tSteps]
+        Timeseries 2
+    dt : float, optional
+        Cadence of the data. The default is 16.7 [s].
+    t0 : float, optional
+        Starting time of the data. The default is 0.
+    use_cache: bool, optional
+        Use cached estimate for the red noise level on the first iteration. 
+        Default set to False, as for new data series you have to model the 
+        red noise level separately.
+
+    Returns
+    -------
+    angles : TYPE
+        DESCRIPTION.
+    cor_sig_all : TYPE
+        DESCRIPTION.
+    freq : TYPE
+        DESCRIPTION.
+
+    """
+
+    angles = np.zeros((72, 123, timeSeries1.shape[0]))
+    cor_sig_all = np.zeros((72, 123, timeSeries1.shape[0]))
+
+    for el in range(0, timeSeries1.shape[0]-2):
+        print(el)
+        N = timeSeries1.shape[1]
+        t = np.arange(0, N) * dt + t0
+
+        timeSeries1_ex = timeSeries1[el, :]
+        std_timeSeries1 = timeSeries1_ex.std()  # Standard deviation
+        var_timeSeries1 = std_timeSeries1 ** 2  # Variance
+        timeSeries1_norm = timeSeries1_ex / std_timeSeries1  # Normalized dataset
+
+        timeSeries2_ex = timeSeries2[el, :]
+        std_timeSeries2 = timeSeries2_ex.std()  # Standard deviation
+        var_timeSeries2 = std_timeSeries2 ** 2  # Variance
+        timeSeries2_norm =timeSeries2_ex / std_timeSeries2  # Normalized dataset
+
+        t1 = t2 = np.linspace(0, timeSeries1_ex.size - 1, 
+                              num=timeSeries1_ex.size)*dt
+
+        mother = wavelet.Morlet(6)
+        s0 = 2 * dt  # Starting scale, in this case 2 * 0.25 secondss = 6 months
+        dj = 1 / 12  # Twelve sub-octaves per octaves
+        J = 7 / dj  # Seven powers of two with dj sub-octaves
+        print(timeSeries1_ex.shape)
+        try:
+            alpha, _, _ = wavelet.ar1(timeSeries1_norm)  # Lag-1 autocorrelation for red noise
+
+
+            WCT, aWCT, cor_coi, freq, sig = wavelet.wct(timeSeries1_norm, 
+                                                         timeSeries2_norm, 
+                                                         dt, dj=1/12, 
+                                                         s0=s0, J=-1,
+                                                         significance_level=0.8646,
+                                                         wavelet='morlet', 
+                                                         normalize=True,
+                                                         cache=use_cache)
+
+            cor_sig = np.ones([1, timeSeries1_ex.size]) * sig[:, None]
+            cor_sig = np.abs(WCT) / cor_sig  # Power is significant where ratio > 1
+            cor_sig_all[:, :, el] = cor_sig
+            use_cache=True
+            angles[:, :, el] = aWCT
+            
+            coi_mask = make_coi_mask(freq, cor_coi)
+        except:
+             print(f"Iteration {el} didn't find an AR model to fit the data")
+    # Calculates the phase between both time series. The phase arrows in the
+    # cross wavelet power spectrum rotate clockwise with 'north' origin.
+    # The relative phase relationship convention is the same as adopted
+    # by Torrence and Webster (1999), where in phase signals point
+    # upwards (N), anti-phase signals point downwards (S). If X leads Y,
+    # arrows point to the right (E) and if X lags Y, arrow points to the
+    # left (W).
+            
+
+    return angles, cor_sig_all, freq, coi_mask
+
+
+def make_coi_mask(freq, cor_coi):
+    """
+    Make a mask for the cone of influence that can be applied to the measured 
+    quantities from the 
+
+    Parameters
+    ----------
+    freq : ndarray [num_freq]
+        Frequency array
+    cor_coi : ndarray [num_time]
+        Cone of influence 
+
+    Returns
+    -------
+    coi_mask : ndarray [num_freq, num_time]
+        Cone of influence mask to be applied.
+
+    """
+    num_freq = freq.size
+    num_time = cor_coi.size 
+    
+    coi_mask = np.zeros((num_freq, num_time))
+    
+    for ii in range(num_time):
+        min_freq = 1/cor_coi[ii]
+        jj = 0
+        while freq[jj] > min_freq:
+            coi_mask[jj, ii] = 1
+            jj += 1
+    
+    return coi_mask

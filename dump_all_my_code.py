@@ -1,121 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jan 18 23:52:17 2021
-Calculate some cross-wavelet-spectra, coherencies and their phases;
+Created on Wed Feb 17 23:49:17 2021
+
 @author: molnarad
 """
 
-import numpy as np
-import matplotlib.pyplot as pl
-from matplotlib.image import NonUniformImage
 
-from scipy import io
-
-from IRIS_lib import filter_velocity_field, load_velocity_mg2, plot_velocity_map
-from IRIS_lib import plot_intensity_map, average_velmap_slitwise
-from IRIS_lib import calc_Pxx_velmap, plot_Pxx_2D
-
-import pycwt as wavelet
-from pycwt.helpers import find
-
-
-
-file_name = ["../IRIS_data/CH_data/CH_vel_mgk_mu=0.99.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.93.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.83.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.75.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.65.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",]
-
-file_index = 2
-
-file_name = file_name[file_index]
-
-mu_angle = file_name[-8:-4]
-print(f"The mu angle is {mu_angle}")
-d= ("/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/"
-    + "Meetings_with_Steve/2021_01_14/")
-
-
-cadence = [9.47, 16.39, 9.33, 9.33, 16.21, 9.57]
-dt      = cadence[file_index]
-bp, rp, lc = load_velocity_mg2(file_name)
-
-dd_param = 1
-slit_av_param = 1
-
-
-asp= 0.075/dd_param*1
-asp_pxx = 5/dd_param*2.5
-
-t_limits = [1, -5]
-slit_limits = [10,-100]
-
-k_2v_v = filter_velocity_field(bp[t_limits[0]:t_limits[1], 
-                                  slit_limits[0]:slit_limits[1], 0, 0], 
-                               dd=dd_param)
-plot_velocity_map(k_2v_v, title="CH k2v velocity @ mu="+mu_angle, 
-                  aspect=asp, d=d, cadence = dt)
-
-
-k_3_v = filter_velocity_field(lc[t_limits[0]:t_limits[1], 
-                                 slit_limits[0]:slit_limits[1], 0, 0], 
-                              dd=dd_param)
-plot_velocity_map(k_3_v, title="CH k3 velocity @ mu="+mu_angle, 
-                  aspect=asp, d=d, cadence=dt)
-
-title = 'IRIS Mg II k2v Velocity'
-label = 'k2v-k3 Vel'
-units = 'km s$^{-1}$'
-t0 = 0
-dt = dt  # In seconds
-
-N = k_2v_v.shape[1]
+N = MgII_vel.shape[1]
 t = np.arange(0, N) * dt + t0
 
-k2v_ex = k_2v_v[225, :]
-std_k2v = k2v_ex.std()  # Standard deviation
-var_k2v = std_k2v ** 2  # Variance
-k2v_norm = k2v_ex / std_k2v  # Normalized dataset
+MgII_ex = MgII_vel[650, :]
+std_MgII = MgII_ex.std()  # Standard deviation
+var_MgII = std_MgII ** 2  # Variance
+MgII_norm = MgII_ex / std_MgII  # Normalized dataset
 
+MnI_ex = MnI_vel[650, :]
+std_MnI = MnI_ex.std()  # Standard deviation
+var_MnI = std_MnI ** 2  # Variance
+MnI_norm = MnI_ex / std_MnI  # Normalized dataset
 
-k3v_ex = k_3_v[225, :]
-std_k3v = k3v_ex.std()  # Standard deviation
-var_k3v = std_k3v ** 2  # Variance
-k3v_norm = k3v_ex / std_k3v  # Normalized dataset
-
-t1 = t2 = np.linspace(0, k3v_ex.size - 1, num=k3v_ex.size)*dt
+t1 = t2 = np.linspace(0, MgII_ex.size - 1, num=MgII_ex.size)*dt
 
 mother = wavelet.Morlet(6)
 s0 = 2 * dt  # Starting scale, in this case 2 * 0.25 secondss = 6 months
 dj = 1 / 12  # Twelve sub-octaves per octaves
 J = 7 / dj  # Seven powers of two with dj sub-octaves
-alpha, _, _ = wavelet.ar1(k2v_ex)  # Lag-1 autocorrelation for red noise
-
-d = "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/IRIS_waves/IRIS_data/QS_data/"
-filename = "iris_l2_20131116_073345_3803010103_raster_t000_r00000MnI_2801.9.sav"
-
-aa = io.readsav(d+filename)
-
-fit_params = aa["fit_params"]
-
-velocities = fit_params[1, :, :]
-
-rest_wave = np.median(velocities) + 2801.95
-
-velocities = (velocities - rest_wave)*3e5/rest_wave
-
-vel_reduced_Mn = filter_velocity_field(velocities.T,  
-                                    dv=1, dd=3, degree=1)
-
-plot_velocity_map(vel_reduced, vmin=-2, vmax=2, aspect=0.1, 
-                  title="Mn I 2801.5 $\AA$ Doppler velocity ")
+alpha, _, _ = wavelet.ar1(MgII_ex)  # Lag-1 autocorrelation for red noise
 
 
-wave, scales, freqs, coi, fft, fftfreqs = wavelet.cwt(k2v_ex, dt, dj, s0, J,
+wave, scales, freqs, coi, fft, fftfreqs = wavelet.cwt(MnI_ex, dt, dj, s0, J,
                                                       mother)
-iwave = wavelet.icwt(wave, scales, dt, dj, mother) * std_k2v
+iwave = wavelet.icwt(wave, scales, dt, dj, mother) * std_MnI
 
 power = (np.abs(wave)) ** 2
 fft_power = np.abs(fft) ** 2
@@ -129,7 +45,7 @@ sig95 = power / sig95
 
 glbl_power = power.mean(axis=1)
 dof = N - scales  # Correction for padding at edges
-glbl_signif, tmp = wavelet.significance(var_k2v, dt, scales, 1, alpha,
+glbl_signif, tmp = wavelet.significance(var_MnI, dt, scales, 1, alpha,
                                         significance_level=0.95, dof=dof,
                                         wavelet=mother)
 
@@ -144,7 +60,7 @@ fig = pl.figure(**figprops)
 # transform.
 ax = pl.axes([0.1, 0.75, 0.65, 0.2])
 ax.plot(t, iwave, '-', linewidth=1, color=[0.5, 0.5, 0.5])
-ax.plot(t, k2v_ex, 'k', linewidth=1.5)
+ax.plot(t, MgII_ex, 'k', linewidth=1.5)
 ax.set_title('a) {}'.format(title))
 ax.set_ylabel(r'{} [{}]'.format(label, units))
 
@@ -176,13 +92,13 @@ bx.set_xlabel("Time [seconds]")
 # noise spectra. Note that period scale is logarithmic.
 cx = pl.axes([0.77, 0.37, 0.2, 0.28], sharey=bx)
 cx.plot(glbl_signif, np.log2(period), 'k--')
-cx.plot(var_k2v * fft_theor, np.log2(period), '--', color='#cccccc')
-cx.plot(var_k2v * fft_power, np.log2(1./fftfreqs), '-', color='#cccccc',
+cx.plot(var_MgII * fft_theor, np.log2(period), '--', color='#cccccc')
+cx.plot(var_MgII * fft_power, np.log2(1./fftfreqs), '-', color='#cccccc',
         linewidth=1.)
-cx.plot(var_k2v * glbl_power, np.log2(period), 'k-', linewidth=1.5)
+cx.plot(var_MgII * glbl_power, np.log2(period), 'k-', linewidth=1.5)
 cx.set_title('c) Global Wavelet Spectrum')
 cx.set_xlabel(r'Power [({})$^2$]'.format(units))
-cx.set_xlim([0, (glbl_power * var_k2v).max()])
+cx.set_xlim([0, (glbl_power * var_MgII).max()])
 cx.set_ylim(np.log2([period.min(), period.max()]))
 cx.set_yticks(np.log2(Yticks))
 cx.set_yticklabels(Yticks)
@@ -192,26 +108,26 @@ pl.savefig(d+"wavelet_test_k2v.png")
 pl.show()
 
 
-W12, cross_coi, freq, signif = wavelet.xwt(k2v_ex, k3v_ex, dt, dj=1/12, s0=s0,
+W12, cross_coi, freq, signif = wavelet.xwt(MgII_ex, MnI_ex, dt, dj=1/12, s0=s0,
                                            J=-1,
                                            significance_level=0.8646,
                                            wavelet='morlet', normalize=True)
 
 cross_power = np.abs(W12)**2
-cross_sig = np.ones([1, k2v_ex.size]) * signif[:, None]
+cross_sig = np.ones([1, MgII_ex.size]) * signif[:, None]
 cross_sig = cross_power / cross_sig  # Power is significant where ratio > 1
 cross_period = 1/freq
 
 # Calculate the wavelet coherence (WTC). The WTC finds regions in time
 # frequency space where the two time seris co-vary, but do not necessarily have
 # high power.
-WCT, aWCT, corr_coi, freq, sig = wavelet.wct(k2v_ex, k3v_ex, dt, dj=1/12, 
+WCT, aWCT, corr_coi, freq, sig = wavelet.wct(MgII_ex, MnI_ex, dt, dj=1/12, 
                                              s0=s0, J=-1,
                                              significance_level=0.8646,
                                              wavelet='morlet', normalize=True,
                                              cache=True)
 
-cor_sig = np.ones([1, k2v_ex.size]) * sig[:, None]
+cor_sig = np.ones([1, MgII_ex.size]) * sig[:, None]
 cor_sig = np.abs(WCT) / cor_sig  # Power is significant where ratio > 1
 cor_period = 1 / freq
 
@@ -320,9 +236,9 @@ ax2.contour(t, np.log2(cor_period), cor_sig, [-99, 1], colors='k', linewidths=2,
            extent=extent)
 ax2.fill(np.concatenate([t1, t1[-1:] + dt, t1[-1:] + dt,
                         t1[:1] - dt, t1[:1] - dt]),
-         np.concatenate([np.log2(corr_coi), [1e-9], np.log2(cor_period[-1:]),
+        np.concatenate([np.log2(corr_coi), [1e-9], np.log2(cor_period[-1:]),
                         np.log2(cor_period[-1:]), [1e-9]]),
-         'k', alpha=0.3, hatch='x')
+        'k', alpha=0.3, hatch='x')
 ax2.set_title('b) {} X Wavelet Coherence Spectrum ({})'.format(label, mother.name))
 ax2.set_ylabel('Period (seconds)')
 ax2.quiver(t1[::plot_every], np.log2(cor_period[::plot_every]), 

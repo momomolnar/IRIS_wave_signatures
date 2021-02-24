@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Dec 30 14:35:45 2020
+Created on Mon Feb 22 18:37:32 2021
+
+Plot the QS data in
 
 @author: molnarad
 """
@@ -13,19 +15,19 @@ from IRIS_lib import calc_Pxx_velmap, plot_Pxx_2D
 
 
 
-file_name = ["../IRIS_data/CH_data/CH_vel_mgk_mu=0.99.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.93.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.83.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.75.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.65.sav",
-             "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",]
-file_index = 3
+file_name = ["../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.2.sav",
+             "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.4.sav",
+             "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.8.sav",
+             "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=1.0.sav",
+             "../IRIS_data/QS_data/iris_l2_20131116_073345_3803010103_raster_t000_r00000_mg2_vel_mu=1.0.sav"]
+
+file_index = -2
 file_name = file_name[file_index]
 mu_angle = file_name[-8:-4]
 print(f"The mu angle is {mu_angle}")
 d= "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/Meetings/Meetings_with_Steve/2021_02_25/"
 
-cadence = [9.47, 16.39, 9.33, 9.33, 16.21, 9.57]
+cadence = [16.7, 16.7, 16.7, 16.7, 16.7, 16.7, 16.7, 16.7]
 dt      = cadence[file_index]
 
 

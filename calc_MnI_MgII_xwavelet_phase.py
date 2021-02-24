@@ -11,6 +11,7 @@ import numpy as np
 from scipy import io
 import matplotlib.pyplot as pl
 from IRIS_lib import plot_velocity_map, filter_velocity_field, remove_nans
+from IRIS_lib import calc_phase_diff
 
 
 import pycwt as wavelet
@@ -83,7 +84,7 @@ def calc_angle(timeSeries1, timeSeries2):
     angles = np.zeros((72, 123, timeSeries1.shape[0]))
     cor_sig_all = np.zeros((72, 123, timeSeries1.shape[0]))
 
-
+    use_cache = True
     for el in range(40, timeSeries1.shape[0]-100):
         N = timeSeries1.shape[1]
         t = np.arange(0, N) * dt + t0
@@ -109,20 +110,20 @@ def calc_angle(timeSeries1, timeSeries2):
         alpha, _, _ = wavelet.ar1(timeSeries1_norm)  # Lag-1 autocorrelation for red noise
 
 
-        WCT, aWCT, corr_coi, freq, sig = wavelet.wct(timeSeries1_norm, 
+        WCT, aWCT, cor_coi, freq, sig = wavelet.wct(timeSeries1_norm, 
                                                      timeSeries2_norm, 
                                                      dt, dj=1/12, 
                                                      s0=s0, J=-1,
                                                      significance_level=0.8646,
                                                      wavelet='morlet', 
                                                      normalize=True,
-                                                     cache=True)
+                                                     cache=use_cache)
 
         cor_sig = np.ones([1, timeSeries1_ex.size]) * sig[:, None]
         cor_sig = np.abs(WCT) / cor_sig  # Power is significant where ratio > 1
         cor_sig_all[:, :, el] = cor_sig
         cor_period = 1 / freq
-
+        use_cache = True
     # Calculates the phase between both time series. The phase arrows in the
     # cross wavelet power spectrum rotate clockwise with 'north' origin.
     # The relative phase relationship convention is the same as adopted
@@ -132,11 +133,11 @@ def calc_angle(timeSeries1, timeSeries2):
     # left (W).
         angles[:, :, el] = aWCT
 
-    return angles, cor_sig_all, freq
+    return angles, cor_sig_all, freq, cor_coi, cor_period
 
 d = "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/IRIS_waves/IRIS_data/QS_data/"
 filename_MnI = "iris_l2_20131116_073345_3803010103_raster_t000_r00000MnI_2801.9.sav"
-filename_Mg = "iris_l2_20131116_073345_3803010103_raster_t000_r00000_mg2_vel.sav"
+filename_Mg = "iris_l2_20131116_073345_3803010103_raster_t000_r00000_mg2_vel_mu=1.0.sav"
 
 title = 'IRIS Mg II -- Mn I'
 label = 'Vel'
@@ -150,9 +151,9 @@ fit_params = aa["fit_params"]
 
 velocities = fit_params[1, :, :]
 
-rest_wave = np.median(velocities) + 2801.95
+rest_wave = np.median(velocities)
 
-velocities = (velocities - rest_wave)*3e5/rest_wave
+velocities = (velocities - rest_wave)*3e5/2802.05
 print(velocities.shape)
 
 MnI_vel = filter_velocity_field(velocities.T,  
@@ -173,27 +174,35 @@ MgII_vel = filter_velocity_field(velocities,
 plot_velocity_map(MgII_vel, vmin=-7, vmax=7, aspect=0.3, 
                   title="Mg II h 2v Doppler velocity ")
 
-angles, cor_sig_all, freq = calc_angle(MgII_vel, MnI_vel)
+angles, cor_sig_all, freq, coi_mask = calc_phase_diff(MgII_vel, MnI_vel)
+
 
 angles_average = [angle_mean(el.flatten()) for el in 
-                  angles]
+                  angles * coi_mask[:, :, None]]
 angles_average = np.array(angles_average)
 
-angles_masked = angles*cor_sig_all
+angles_masked = angles * cor_sig_all * coi_mask[:, :, None] 
 
-phase_freq = np.zeros(72)
-for el in range(72): 
-    temp = angles_masked[el, :, :]
-    temp = remove_nans(temp, replace=0)
-    temp = np.ma.masked_less(temp, 0.0)
-    temp1 = temp.compressed()
-    phase_freq[el] = angle_mean(temp1.flatten())
-    
+
+num_freq = angles_masked.shape[0]
+phase_freq = np.zeros(num_freq)
+
+for el in range(num_freq):
+    try:
+        temp = angles_masked[el, :, :]
+        temp[np.isnan(temp)] = 0
+        temp = np.ma.masked_equal(temp, 0.0)
+        temp1 = temp.compressed()
+        phase_freq[el] = angle_mean(temp1.flatten())
+    except: 
+        print(f"Too many zeros on line {el}")
+        
 pl.figure(dpi=250)
 pl.plot(freq*1e3, angles_average*180/3.1415, label="All angles")
 pl.plot(freq*1e3, phase_freq*180/3.1415, 
         label="Statistically significant")
 pl.xlabel("Frequency [mHz]")
+pl.title("Phase Diff Mn I - Mg II vel")
 pl.grid()
 pl.legend()
 pl.ylabel("Phase difference [deg]")
