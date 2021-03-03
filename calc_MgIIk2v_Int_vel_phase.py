@@ -17,7 +17,7 @@ from IRIS_lib import angle_mean, calc_phase_diff, plot_intensity_map, average_ve
 
 
 d = "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/IRIS_waves/IRIS_data/QS_data/"
-filename_Mg = "iris_l2_201311167_QS_SitAndStare_mu=0.4.sav"
+filename_Mg = "iris_l2_201311167_QS_SitAndStare_mu=0.8.sav"
 
 title = 'IRIS Mg II k2v Velocity-Intensity'
 label = 'Vel-Intensity'
@@ -25,11 +25,12 @@ units = 'km s$^{-1}$'
 t0 = 0
 dt = 16.7 # In seconds
 
+mu_angle = filename_Mg[-7:-4]
 #Load velocity sequence 1
 aa = io.readsav(d+filename_Mg)
 fit_params = aa["bp"]
 
-velocities = fit_params[:, :, 0, 0]
+velocities = fit_params[:, :, 0, 1]
 MgII_k2v = filter_velocity_field(velocities,
                                  dv=7, dd=5, degree=2)
 
@@ -42,7 +43,7 @@ plot_velocity_map(MgII_k2v, vmin=-6, vmax=6, aspect=0.3,
 # MgII_k3 = filter_velocity_field(velocities,
 #                                 dv=7, dd=5, degree=2)
 
-bp_new = np.swapaxes(fit_params[3:, :, 1, 0], 0, 1)
+bp_new = np.swapaxes(fit_params[0:-3, :, 1, 0], 0, 1)
 intensity = bp_new
 
 intensity = np.array(intensity)
@@ -57,7 +58,7 @@ plot_intensity_map(intensity,
 
 
 angles, cor_sig_all, freq, coi_map = calc_phase_diff(MgII_k2v, intensity, 
-                                                     use_cache=False)
+                                                     use_cache=True)
 
 #compute ALL the phases averaged
 angles_average = [angle_mean(el.flatten()) for el in
@@ -65,9 +66,11 @@ angles_average = [angle_mean(el.flatten()) for el in
 angles_average = np.array(angles_average)
 
 #Compute only the statistically SIGNIFICANT phases 
-angles_masked = angles*cor_sig_all
-phase_freq = np.zeros(70)
-for el in range(70): 
+angles_masked = angles * (cor_sig_all > 1) 
+angles_masked *= coi_map[:, :, None]
+phase_freq = np.zeros(angles_masked.shape[0])
+
+for el in range(angles_masked.shape[0]): 
     temp = angles_masked[el, :, 100:-100]
     temp[np.isnan(temp)] = 0
     temp = np.ma.masked_equal(temp, 0.0)
@@ -76,11 +79,11 @@ for el in range(70):
 
 pl.figure(dpi=250)
 pl.plot(freq*1e3, angles_average*180/3.1415, label="All angles")
-pl.plot(freq[2:]*1e3, phase_freq*180/3.1415,
+pl.plot(freq*1e3, phase_freq*180/3.1415,
         label="Statistically significant")
 pl.xlabel("Frequency [mHz]")
-pl.xlim(0, 15)
+pl.ylim(-180, 180)
 pl.grid()
 pl.legend()
-pl.title("Phase diff between Mg II k2v vel and intensity")
+pl.title(f"Phase diff between Mg II k2v vel and intensity @ mu={mu_angle}")
 pl.ylabel("Phase difference [deg]")

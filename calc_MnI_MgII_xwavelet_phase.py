@@ -181,7 +181,8 @@ angles_average = [angle_mean(el.flatten()) for el in
                   angles * coi_mask[:, :, None]]
 angles_average = np.array(angles_average)
 
-angles_masked = angles * cor_sig_all * coi_mask[:, :, None] 
+angles_masked = angles * (cor_sig_all > 1) 
+angles_masked *= coi_mask[:, :, None]
 
 
 num_freq = angles_masked.shape[0]

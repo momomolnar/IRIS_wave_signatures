@@ -19,7 +19,7 @@ file_name = ["../IRIS_data/CH_data/CH_vel_mgk_mu=0.99.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.75.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.65.sav",
              "../IRIS_data/CH_data/CH_vel_mgk_mu=0.34.sav",]
-file_index = 3
+file_index = -1
 file_name = file_name[file_index]
 mu_angle = file_name[-8:-4]
 print(f"The mu angle is {mu_angle}")
@@ -42,12 +42,14 @@ asp_pxx = "auto" # 5/dd_param*5
 t_limits = [1, -2]
 slit_limits = [10,-100]
 
+line_index = 1 
+
 k_2v_v = filter_velocity_field(bp[t_limits[0]:t_limits[1], 
-                                  slit_limits[0]:slit_limits[1], 0, 0], 
+                                  slit_limits[0]:slit_limits[1], 0, line_index], 
                                dv=7, dd=5, degree=2)
 plot_velocity_map(k_2v_v, title="CH k2v velocity @ mu="+mu_angle, 
                   aspect=asp, d=d, cadence = dt)
-bp_new = np.swapaxes(bp[t_limits[0]:t_limits[1], slit_limits[0]:slit_limits[1], 1, 0], 0, 1)
+bp_new = np.swapaxes(bp[t_limits[0]:t_limits[1], slit_limits[0]:slit_limits[1], 1, line_index], 0, 1)
 plot_intensity_map(average_velmap_slitwise(bp_new, slit_av_param),
                    title="CH k2v intensity @ mu="+mu_angle, 
                    aspect=asp, 
@@ -59,12 +61,12 @@ plot_Pxx_2D(freq, Pxx_k_2v_v, title="CH PSD k2v intensity @ mu="+mu_angle,
             aspect=asp_pxx, d=d, remove_noise=False)
 
 k_3_v = filter_velocity_field(lc[t_limits[0]:t_limits[1], 
-                                 slit_limits[0]:slit_limits[1], 0, 0],
+                                 slit_limits[0]:slit_limits[1], 0, line_index],
                               dv=7, dd=5, degree=2)
 plot_velocity_map(k_3_v, title="CH k3 velocity @ mu="+mu_angle, 
                   aspect=asp, d=d, cadence=dt, vmin=-9, vmax=9)
 bp_new = np.swapaxes(lc[t_limits[0]:t_limits[1], slit_limits[0]:slit_limits[1], 
-                        1, 0], 
+                        1, line_index], 
                      0, 1)
 plot_intensity_map(average_velmap_slitwise(bp_new, slit_av_param), 
                    title="CH k3 intensity @ mu="+mu_angle, aspect=asp, 

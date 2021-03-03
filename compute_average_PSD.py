@@ -93,11 +93,11 @@ def calc_Pxx(file_name):
     return freq, P_v_container, P_v_containerm
     return freq, P_v_container, P_v_containerm
 
-file_name_mu02 = "../IRIS_data/iris_l2_201311167_QS_SitAndStare_mu=0.2.sav"
-file_name_mu04 = "../IRIS_data/iris_l2_201311167_QS_SitAndStare_mu=0.4.sav"
-file_name_mu06 = "../IRIS_data/iris_l2_201311167_QS_SitAndStare_mu=0.6.sav"
-file_name_mu08 = "../IRIS_data/iris_l2_201311167_QS_SitAndStare_mu=0.8.sav"
-file_name_mu10 = "../IRIS_data/iris_l2_201311167_QS_SitAndStare_mu=1.0.sav"
+file_name_mu02 = "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.2.sav"
+file_name_mu04 = "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.4.sav"
+file_name_mu06 = "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.6.sav"
+file_name_mu08 = "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=0.8.sav"
+file_name_mu10 = "../IRIS_data/QS_data/iris_l2_201311167_QS_SitAndStare_mu=1.0.sav"
 
 freq, P_v_mu02, P_v_mu02_a = calc_Pxx(file_name_mu02)
 freq, P_v_mu04, P_v_mu04_a = calc_Pxx(file_name_mu04)

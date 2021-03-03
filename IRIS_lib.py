@@ -651,10 +651,13 @@ def angle_mean(angles):
                 zip(r, angles)]
     
     xy_array = np.array(xy_array)
-    x_mean = np.mean(xy_array[:, 0])
-    y_mean = np.mean(xy_array[:, 1])
+    try:
+        x_mean = np.mean(xy_array[:, 0])
+        y_mean = np.mean(xy_array[:, 1])
     
-    r, mean_angle = convert_cart_to_polar(x_mean, y_mean)
+        r, mean_angle = convert_cart_to_polar(x_mean, y_mean)
+    except: 
+        mean_angle = 0
     return mean_angle
 
 
