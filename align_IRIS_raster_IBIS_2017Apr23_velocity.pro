@@ -14,8 +14,9 @@ size_file    = size(example_file)
 num_waves    = size_file[1]
 num_ypix     = size_file[2]
 num_steps    = size_file[3]
-
-dy = 12
+ 
+dy = 12 ; number of IRIS pixels (0.166 arcsec) per one step of the IRIS raster 
+        ; which is 1.996 arcseconds
 
 data_cube_bp_v = fltarr(1000, 1000, 2, num_files)
 data_cube_rp_v = fltarr(1000, 1000, 2, num_files)
@@ -34,13 +35,14 @@ FOR ii= 0, (num_files-1) DO BEGIN
     iris_get_mg_features_lev2, files[ii], 7, vl, lc, bp, rp
     FOR step=0, (num_steps-1) DO BEGIN
         FOR jj=0, (dy-1) DO BEGIN
-            dx0 = 418 + step*12 + jj
+            dx0 = 418 + step*dy + jj
             temp_empty_bp[dx0, 343:741, *, *] = $
                 transpose(bp[*, *, *, step], [2, 0, 1])
             temp_empty_lc[dx0, 343:741, *, *] = $
                 transpose(lc[*, *, *, step], [2, 0, 1])
             temp_empty_rp[dx0, 343:741, *, *] = $
                 transpose(rp[*, *, *, step], [2, 0, 1])
+            print, "step is", ii, step, jj, dx0
         ENDFOR
     ENDFOR
 
