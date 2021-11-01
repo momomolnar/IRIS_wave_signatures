@@ -157,7 +157,7 @@ velocities = (velocities - rest_wave)*3e5/2802.05
 print(velocities.shape)
 
 MnI_vel = filter_velocity_field(velocities.T,  
-                                dv=7, dd=5, degree=2)
+                                dt=7, dx=7, dd=3, degree=1)
 
 plot_velocity_map(MnI_vel, vmin=-2, vmax=2, aspect=0.3, 
                   title="Mn I 2801.5 $\AA$ Doppler velocity ")
@@ -169,7 +169,7 @@ fit_params = aa["bp"]
 velocities = fit_params[:, :, 0, 0]
 
 MgII_vel = filter_velocity_field(velocities,  
-                                 dv=7, dd=5, degree=2)
+                                 dt=7, dx=7, dd=3, degree=1)
 
 plot_velocity_map(MgII_vel, vmin=-7, vmax=7, aspect=0.3, 
                   title="Mg II h 2v Doppler velocity ")
@@ -203,7 +203,7 @@ pl.plot(freq*1e3, angles_average*180/3.1415, label="All angles")
 pl.plot(freq*1e3, phase_freq*180/3.1415, 
         label="Statistically significant")
 pl.xlabel("Frequency [mHz]")
-pl.title("Phase Diff Mn I - Mg II vel")
+pl.title("Phase Difference Mn I - Mg II velocity")
 pl.grid()
 pl.legend()
 pl.ylabel("Phase difference [deg]")

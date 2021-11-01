@@ -59,7 +59,7 @@ for el in range(6):
 
     k_2v_v = filter_velocity_field(bp[t_limits[0]:t_limits[1], 
                                    slit_limits[0]:slit_limits[1], 0, line_index], 
-                                   dv=7, dd=5, degree=2)
+                                   dt=7, dd=5, degree=2)
 
 
     # plot_velocity_map(k_2v_v, title="QS k2v velocity @ mu="+mu_angle, 
@@ -67,7 +67,8 @@ for el in range(6):
     freq, Pxx_k_2v_v = calc_Pxx_velmap(k_2v_v, fsi=1/dt)
 
     
-    Pxx_average = np.mean(Pxx_k_2v_v[av_ind[el][0]:av_ind[el][1], :], axis=0)
+    Pxx_average = np.nanquantile(Pxx_k_2v_v[av_ind[el][0]:av_ind[el][1], :],
+                                 0.5, axis=0)
     
     pl.loglog(freq, Pxx_average/1e3, '.--', label="$\\mu$ = " + mu_angle)
     print(f"Total power between 5 and 20 mHz is: " + 

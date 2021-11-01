@@ -32,12 +32,12 @@ for el in range(len(data_regions)-1):
     print(f"Calculating slit location {el}")
     xx = int((data_regions[el] + data_regions[el+1]) // 2)
     vel_reduced_h = filter_velocity_field(aa["data_cube_lc_v"][:, 0, :, xx],
-                                          dv=7, dd=3, degree=2)
+                                          dv=16, dd=4, degree=2)
     vel_reduced_k = filter_velocity_field(aa["data_cube_lc_v"][:, 1, :, xx],
-                                          dv=7, dd=3, degree=2)
+                                          dv=7, dd=4, degree=2)
     
-    freq, Pxx_k = calc_Pxx_velmap(vel_reduced_k)
-    freq, Pxx_h = calc_Pxx_velmap(vel_reduced_h)
+    freq, Pxx_k = calc_Pxx_velmap(vel_reduced_k, fsi=1/36)
+    freq, Pxx_h = calc_Pxx_velmap(vel_reduced_h, fsi=1/36)
     
     Pxx_average = .5*(Pxx_k + Pxx_h)
     
@@ -45,7 +45,8 @@ for el in range(len(data_regions)-1):
 
     power_map[1:, data_regions[el]:data_regions[el+1]] = power[:, None] 
     
-    # plot_Pxx_2D(freq, ((Pxx_h_2r_v0+Pxx_h_2r_v1)/2)[250:-150, :], title="", aspect=30, vmina=-1., vmaxa=0.0)
+    # plot_Pxx_2D(freq, ((Pxx_h_2r_v0+Pxx_h_2r_v1)/2)[250:-150, :], title="", 
+    #             vimaspect=30, vmina=-1., vmaxa=0.0)
 
 pl.imshow(np.log10(power_map+1e-15), origin="lower", vmin=-3, vmax=-1)
 

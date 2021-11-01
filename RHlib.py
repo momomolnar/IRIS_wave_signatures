@@ -9,7 +9,7 @@ Created on Tue Oct 15 13:47:55 2019
 
 import numpy as np
 import scipy as sp
-#import radynpy as rp
+import radynpy as rp
 import matplotlib.pyplot as plt
 import astropy.io.fits as fits
 
@@ -908,7 +908,7 @@ class RADYN_atmos():
 
     """
     def __init__(self, cdfFile):
-
+        import radynpy as rp
         self.name        = cdfFile
         self.rad         = rp.cdf.LazyRadynData(cdfFile)
         self.temperature = self.rad.tg1

@@ -4,8 +4,8 @@ files = find_files("*.fits", data_dir)
 
 num_exten = 8 ; 7 Mg h/k lines
 
-start_index = 100 
-end_index = 400
+start_index = 2 
+end_index = 499
 
 num_files = end_index - start_index
 

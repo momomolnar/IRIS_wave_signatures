@@ -25,6 +25,33 @@ from RHlib import calc_v_lc
 
 pl.style.use('science')
 
+def calc_median_hist(yedges, n):
+    '''
+    Calculate the median of a histogram column.
+
+    Parameters
+    ----------
+    yedges : TYPE
+        DESCRIPTION.
+    n : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    y_edge : TYPE
+        DESCRIPTION.
+
+    '''
+    y_edge = 0
+    n_count = 0
+    n_total = np.sum(n)
+
+    while n_count < n_total/2.0:
+        n_count = n_count + n[y_edge]
+        y_edge = y_edge + 1
+
+    return y_edge
+
 def remove_nans(array, replace="median", print_replacement = False):
     """
     Remove Nans from an array
@@ -55,7 +82,7 @@ def remove_nans(array, replace="median", print_replacement = False):
     
     return array1
 
-def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
+def filter_velocity_field(vel_field, dt=8, dd=4, dx=10, degree=2):
     """
     Filter raw velocity map from IDL input
     by doing the following three steps:
@@ -65,14 +92,17 @@ def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
         averaging over them;
         2) Remove longterm trends along the temporal direction without
         by removing a polynomial of degree <degree>.
-        3) average in the horizontal direction;
+        3) average in the horizontal (slit) direction;
     
     Parameters
     ----------
     vel_field : ndarray()
         Input velocity field to be filtered.
-    dv : int, optional
-        Velocity jump over which to renormaliza The default is 8.
+    dt : int, optional, The default is 8.
+        Velocity jump over which to normalize in the temporal direction.
+    dx : int, optional,  The default is 10
+        Velocity jump over which to normaliza in the slit direction.
+    
     dd : int, optional
         Averaging over the slit dimension. The default is 4.
     degree : int, optional
@@ -91,14 +121,15 @@ def filter_velocity_field(vel_field, dv=8, dd=4, degree=2):
     vel_field[np.isnan(vel_field)] = filter_value
     vel_field = remove_nanvalues(vel_field, filter_value=filter_value)
 
-    vel_field = correct_IRIS_noisy_maps(vel_field, dv)
+    vel_field = correct_IRIS_noisy_maps(vel_field, dx=dx, dt=dt)
 
-    vel_field = detrend_data(vel_field)
+
     vel_field = average_velmap_slitwise(vel_field, dd)
-    
-    return vel_field
+    vel_field = detrend_data(vel_field).T
 
-def remove_nanvalues(vel_field, filter_value=-400):
+    return vel_field.T
+
+def remove_nanvalues(vel_field, filter_value=-30):
     """
     Remove the very negative numbers from our array that were NaNs 
 
@@ -120,7 +151,8 @@ def remove_nanvalues(vel_field, filter_value=-400):
         for jj in range(4, vel_field.shape[1]-4):
             if vel_field[ii, jj] <= filter_value:
                 vel_field[ii,jj] = 0
-                vel_field[ii, jj] = np.median(vel_field[ii-3:ii+3, jj-3:jj+3])
+                X = np.ma.masked_equal(vel_field[ii-4:ii+4, jj-4:jj+4], filter_value)
+                vel_field[ii, jj] = np.median(X.compressed())
     
     return vel_field
 
@@ -177,7 +209,7 @@ def average_velmap_slitwise(vel_map, av_num=4):
     return velmap_average
 
 def plot_velocity_map(vel_map, aspect=.2, title="", 
-                      d="", vmin=-7.5, vmax=7.5, cadence=17):
+                      d="", vmin=-7.5, vmax=7.5, cadence=17, cmap="bwr"):
     """
     Plot a velocity map.
 
@@ -197,7 +229,8 @@ def plot_velocity_map(vel_map, aspect=.2, title="",
         DESCRIPTION. The default is 7.5.
     cadence: float [seconds]
         Cadence of the observations. Scales the y-axis accordingly.
-
+    cmap: string, optional
+        Colormap to be used. Default is "bwr".
     Returns
     -------
     None.
@@ -207,7 +240,7 @@ def plot_velocity_map(vel_map, aspect=.2, title="",
     vel_map = np.swapaxes(vel_map, 0, 1)
     pl.figure(dpi=250)    
     im1 = pl.imshow(vel_map - np.mean(np.ma.masked_invalid(vel_map)), 
-                    vmin=vmin, vmax=vmax, cmap="bwr", aspect=aspect, 
+                    vmin=vmin, vmax=vmax, cmap=cmap, aspect=aspect, 
                     extent=[0, vel_map.shape[1], 0, vel_map.shape[0]*cadence])
     pl.colorbar(im1, label="Doppler Velocity [km/s]", shrink=1)
     pl.xlabel("Pixels across the slit")
@@ -464,16 +497,18 @@ def correct_IRIS_noisy_series(timeSeries, dd):
     
     
     for el in range(2, n_timesteps-2):
-        if (((timeSeries[el+1] - timeSeries[el]) > dd)
+        if ((np.abs(timeSeries[el+1] - timeSeries[el]) > dd)
             or np.isnan(timeSeries[el+1]) == True):
-            timeSeriesCorrected[el+1] = .5*(timeSeries[el] + timeSeries[el+2])
+            timeSeriesCorrected[el+1] = timeSeries[el]
+                                        #2*timeSeries[el] - timeSeries[el-1]
+                                        #.5*(timeSeries[el] + timeSeries[el+2])
         else:
             timeSeriesCorrected[el+1] = timeSeries[el+1]
     
     return timeSeriesCorrected
 
 
-def correct_IRIS_noisy_maps(timeSeries, dd):
+def correct_IRIS_noisy_maps(timeSeries, dt=15, dx=15):
     """
     Remove spurious signals in the velocity timeseries
 
@@ -481,8 +516,12 @@ def correct_IRIS_noisy_maps(timeSeries, dd):
     ----------
     timeSeries : ndarray [n_timesteps]
         DESCRIPTION.
-    dd : float
-        Threshold over which to interpolate
+    dt : float
+        Threshold over which to interpolate over in the temporal dimension.
+    dx : float     
+        Threshold over which to interpolate over in the slit dimension.
+    
+     
 
     Returns
     -------
@@ -499,39 +538,20 @@ def correct_IRIS_noisy_maps(timeSeries, dd):
     
     for xx in range(0, n_slitsteps-1):
         for el in range(0, n_timesteps-2):
-            if (((timeSeries[el+1, xx] - timeSeries[el, xx]) > dd)
-                or np.isnan(timeSeries[el+1, xx]) == True):
-                i = 0
-                next_pixel = timeSeries[el+2, xx]
-                while np.isnan(next_pixel) == True:
-                    i += 1 
-                    if (el + 2 + i) >= (n_timesteps-2):
-                        next_pixel = np.median(timeSeries[el-10:el-1, xx])
-                    else:
-                        next_pixel = timeSeries[el+2+i, xx]
-                    
-                    
-                timeSeriesCorrected[el+1, xx] = .5*(timeSeries[el, xx] 
-                                                    + next_pixel)
+            if (np.abs(timeSeries[el+1, xx] - timeSeriesCorrected[el, xx]) > dt):                    
+                timeSeriesCorrected[el+1, xx] = np.median(timeSeries[el-3:el+3, xx-3:xx+3])
             else:
                 timeSeriesCorrected[el+1, xx] = timeSeries[el+1, xx]
     
     for el in range(0, n_timesteps-1):
         for xx in range(0, n_slitsteps-2):
-            if (((timeSeries[el, xx+1] - timeSeries[el, xx]) > dd)
-                or np.isnan(timeSeries[el, xx+1]) == True):
-                i = 0
-                next_pixel = timeSeries[el, xx+2]
-                while np.isnan(next_pixel) == True:
-                    i += 1 
-                    if (xx + 2 + i) >= n_slitsteps-2:
-                        next_pixel = np.median(timeSeries[el, xx-10:xx-2])
-                    else:
-                        next_pixel = timeSeries[el, xx+2 + i]
-                timeSeriesCorrected[el, xx+1] = .5*(timeSeries[el, xx] 
-                                                    + next_pixel)
+            if (np.abs(timeSeries[el, xx+1] - timeSeriesCorrected[el, xx]) > dx):
+                timeSeriesCorrected[el, xx+1] = np.median(timeSeries[el-3:el+3, xx-3:xx+3])
+                                                #- timeSeriesCorrected[el-1, xx])
             else:
                 timeSeriesCorrected[el, xx+1] = timeSeries[el, xx+1]
+    
+    
     return timeSeriesCorrected
 
 def detrend_data(timeSeries, dd=2):
@@ -562,9 +582,12 @@ def detrend_data(timeSeries, dd=2):
     
     for el in range(nx):
         xx = np.linspace(0, nt-dt-1, num=nt-dt)
-        fit_fn = np.poly1d(np.polyfit(xx, timeSeries[el, :-3], dd))
-        timeSeries_detrend[el, :] = timeSeries[el, :-dt] - fit_fn(xx)
-    
+        try:
+            fit_fn = np.poly1d(np.polyfit(xx, timeSeries[el, :-3], dd))
+            timeSeries_detrend[el, :] = timeSeries[el, :-dt] - fit_fn(xx)
+        except:
+            mean_timeSeries = np.nanquantile(timeSeries[el, :], 0.5)
+            timeSeries_detrend[el, :] -= mean_timeSeries
     return timeSeries_detrend
  
 def find_lag(timeSeries1, timeSeries2):
@@ -785,3 +808,49 @@ def make_coi_mask(freq, cor_coi):
             jj += 1
     
     return coi_mask
+
+def filter_CII_data(spectral_map, kernel_size=3):
+    '''
+    Filter out a dopplergram following the Rathore and Carlsson, 2015, ApJ, 
+    method. Intended to be used for filtering out the C II IRIS rasters. 
+    
+    s_filt = 1) if sigma_s > sigma -> (sigma/sigma_s)^2 * m_s 
+                                      + (1 - (sigma/sigma_s)^2) * m_s
+             2) if sigma_s < sigma -> m_s
+    
+
+    Parameters
+    ----------
+    spectral_map : ndarray [numSlitLoc, numWaves]
+        Raw spectral map input.
+    kernel_size: int 
+        Kernel size for the averaging window. 
+    Returns
+    -------
+    spectral_map_filted : ndarray [numSlitLoc, numWaves]
+        Filtered spectral map output.
+    '''
+    
+    d_x = (kernel_size - 1) // 2                        #  kernel halfwidth 
+    size_X = spectral_map.shape[0]
+    size_Y = spectral_map.shape[1]
+    
+    mean_spectrum = np.array([[np.mean(spectral_map[i-d_x:i+d_x, j-d_x:j+d_x]) 
+                               for i in range(1, size_X-1)] 
+                               for j in range(1, size_Y-1)]).T
+    
+    var_spectrum = np.array([[np.var(spectral_map[i-d_x:i+d_x, j-d_x:j+d_x]) 
+                              for i in range(1, size_X-1)] 
+                              for j in range(1, size_Y-1)]).T
+    var_ave = np.mean(var_spectrum)
+    
+    velocity_map_filter = np.zeros((size_X, size_Y))
+    
+    var_norm = var_ave / var_spectrum
+    
+    velocity_map_filter = (var_norm * mean_spectrum 
+                           + (1 - var_norm) * spectral_map[1:-1, 1:-1])
+    low_SNR_region = np.where(var_spectrum < var_ave)
+    velocity_map_filter[low_SNR_region] = mean_spectrum[low_SNR_region]
+    
+    return velocity_map_filter
