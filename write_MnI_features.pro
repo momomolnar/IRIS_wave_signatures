@@ -6,12 +6,14 @@
 ;file_name_in = "iris_l2_20131117_111245_3803010103_raster_t000_r00000.fits"
 
 data_dir = "/Users/molnarad/CU_Boulder/Work/Chromospheric_business/IRIS_waves/IRIS_data/Plage_data/"
-files = find_file(data_dir + "*.fits", count=n_files)
+files = find_file(data_dir + "*20160102*.fits", count=n_files)
 
-el = 8
+el = 0
 
-line_index = [7, 2, 7, 7, 7, 7, 2, 2, 7]
-mu_angle = ["_0.44", "_0.67", "_0.87", "_0.48", "_1.00", "_1.000", "_0.39", "_0.22", "_0.70"]
+line_index = [2]
+mu_angle = ["_0.10"]
+;line_index = [7, 2, 7, 7, 7, 7, 2, 2, 7] plage
+;mu_angle = ["_0.44", "_0.67", "_0.87", "_0.48", "_1.00", "_1.000", "_0.39", "_0.22", "_0.70"]
 
 ; line_index = [7, 6, 7, 7, 7, 6] ; CH data
 ; mu_angle  = ["_0.39", "_0.41", "_0.25", "_0.74", "_0.82", "_0.92"]

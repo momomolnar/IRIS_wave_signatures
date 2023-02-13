@@ -4,7 +4,9 @@
 Created on Mon Feb 22 19:12:52 2021
 
 Calculate the Intensity -- Velocity phase in the IRIS data for the k2v line 
-feature
+feature for both plage and for QS.
+
+Use the provided reduced datasets from .npz archives
 
 @author: molnarad
 """
@@ -32,7 +34,7 @@ fit_params = aa["bp"]
 
 velocities = fit_params[:, :, 0, 1]
 MgII_k2v = filter_velocity_field(velocities,
-                                 dv=7, dd=5, degree=2)
+                                 dt=3, dd=3, degree=2)
 
 plot_velocity_map(MgII_k2v, vmin=-6, vmax=6, aspect=0.3,
                   title="Mg II k2v Doppler velocity ")

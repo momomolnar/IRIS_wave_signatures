@@ -21,9 +21,85 @@ from scipy.signal import correlate
 import pycwt as wavelet
 from pycwt.helpers import find
 
+
 from RHlib import calc_v_lc
 
 pl.style.use('science')
+
+class obs_details():
+    def __init__(self, x, y, angle, num_pixels = 720, pixel_size = 0.167,
+                 R_sol=954):
+        """
+        Input for the observations details and calculating the mu-angles 
+        of the pixels in question.
+
+        Parameters
+        ----------
+        x : float 
+            Center x-coordinate of the slit in solar arcsec
+        y : float 
+            Center y-coordinate of the slit in solar arcsec
+        angle : float [degrees] 
+            Inclination of the slit from north-south line
+        num_pixels: int
+            Number of pixels along the slit 
+        pixel_size: float [arcsec]
+            Plate scale of the observation on the CCD along the 
+            slit direction.
+        R_sol: float [arcsec]
+            Angular radius of the Sun at the time of the observation.
+        Returns:
+        -------
+        None.
+
+        """
+        
+        self.x_c     = x
+        self.y_c     = y
+        self.angle = angle
+        self.num_pixels = num_pixels
+        self.pixel_size = pixel_size
+        self.R_sol = R_sol
+        
+        
+    def calc_pixel_coordinates(self):
+        '''
+        Calculate the x-y coordinates of the pixels along the slit.
+
+        Returns
+        -------
+        None
+
+        '''
+        #print(self.num_pixels)
+        self.pixel_coords = np.zeros((self.num_pixels, 2)) # x - [0, :]
+                                                           # y - [1, :] coords 
+        
+        self.pixel_coords[:, 0] = np.array([(self.x_c + ((el 
+                                                        - self.num_pixels//2)
+                                                        * np.sin(self.angle/57.5)
+                                                        * self.pixel_size))
+                                            for el in range(self.num_pixels)])
+                
+        self.pixel_coords[:, 1] = np.array([(self.y_c + ((el 
+                                                        - self.num_pixels//2)
+                                                        * np.cos(self.angle/57.5)
+                                                        * self.pixel_size))
+                                            for el in range(self.num_pixels)])
+        
+    def mu_pixel(self):
+        '''
+        Calculate the mu (cos(theta)) of the observations.
+
+        Returns
+        -------
+        None.
+
+        '''
+        self.calc_pixel_coordinates()
+        self.mu = np.array([np.sqrt(1 - (el[0]**2 + el[1]**2)/self.R_sol**2) 
+                            for el in self.pixel_coords])
+        
 
 def calc_median_hist(yedges, n):
     '''
@@ -79,30 +155,30 @@ def remove_nans(array, replace="median", print_replacement = False):
         for jj in range(array.shape[1]):
             if np.isnan(array[ii, jj]) == True:
                 array1[ii, jj] = replace
-    
+
     return array1
 
 def filter_velocity_field(vel_field, dt=8, dd=4, dx=10, degree=2):
     """
     Filter raw velocity map from IDL input
     by doing the following three steps:
-        0) Replace NaNs with something very small and then remove those 
+        0) Replace NaNs with something very small and then remove those
         really small numbers with the median of 3x3 kernel
         1) remove single jumps in the velocity maps by
         averaging over them;
         2) Remove longterm trends along the temporal direction without
         by removing a polynomial of degree <degree>.
         3) average in the horizontal (slit) direction;
-    
+
     Parameters
     ----------
-    vel_field : ndarray()
+    vel_field : ndarray [n_slitsteps, n_timesteps]
         Input velocity field to be filtered.
     dt : int, optional, The default is 8.
         Velocity jump over which to normalize in the temporal direction.
     dx : int, optional,  The default is 10
         Velocity jump over which to normaliza in the slit direction.
-    
+        The default is 10
     dd : int, optional
         Averaging over the slit dimension. The default is 4.
     degree : int, optional
@@ -114,10 +190,10 @@ def filter_velocity_field(vel_field, dt=8, dd=4, dx=10, degree=2):
         DESCRIPTION.
 
     """
-    
+
     filter_value = -30
     vel_field = np.array(vel_field)
-    
+
     vel_field[np.isnan(vel_field)] = filter_value
     vel_field = remove_nanvalues(vel_field, filter_value=filter_value)
 
@@ -125,18 +201,18 @@ def filter_velocity_field(vel_field, dt=8, dd=4, dx=10, degree=2):
 
 
     vel_field = average_velmap_slitwise(vel_field, dd)
-    vel_field = detrend_data(vel_field).T
+    vel_field = detrend_data(vel_field)
 
-    return vel_field.T
+    return vel_field
 
 def remove_nanvalues(vel_field, filter_value=-30):
     """
-    Remove the very negative numbers from our array that were NaNs 
+    Remove the very negative numbers from our array that were NaNs
 
     Parameters
     ----------
     vel_field : ndarray [nX, nY]
-        Velocity field to be filtered. 
+        Velocity field to be filtered.
     filter_value: int
         Negative value to be removed from the array
 
@@ -146,20 +222,20 @@ def remove_nanvalues(vel_field, filter_value=-30):
         Filtered velocity field
 
     """
-    
+
     for ii in range(4, vel_field.shape[0]-4):
         for jj in range(4, vel_field.shape[1]-4):
             if vel_field[ii, jj] <= filter_value:
                 vel_field[ii,jj] = 0
                 X = np.ma.masked_equal(vel_field[ii-4:ii+4, jj-4:jj+4], filter_value)
                 vel_field[ii, jj] = np.median(X.compressed())
-    
+
     return vel_field
 
 def average_every(array, dd=4):
     """
     Rebin down (average) by a factor <dd>
-    
+
     Parameters
     ----------
     array : ndarray [n_steps]
@@ -173,16 +249,16 @@ def average_every(array, dd=4):
         Output array.
 
     """
-    
-    bb = [np.median(array[ii:(ii+dd)]) for ii 
-          in range(len(array)-1)]
+
+    bb = [np.median(array[ii:(ii+dd)]) for ii
+          in range(len(array))]
     averaged_array = np.array(bb)
-    
+
     return averaged_array
 
-def average_velmap_slitwise(vel_map, av_num=4):
+def average_velmap_slitwise(vel_map, av_num=3):
     """
-    Average a map over the slit dimension. 
+    Average a map over the slit dimension.
     First dimension is slitwise
 
     Parameters
@@ -199,23 +275,23 @@ def average_velmap_slitwise(vel_map, av_num=4):
         Averaged map over the slit dimension.
 
     """
-    
+
     vel_map_r = np.swapaxes(vel_map, 0, 1)
-    
-    vel_map_r_a = np.array([average_every(el, av_num) 
+
+    vel_map_r_a = np.array([average_every(el, av_num)
                             for el in vel_map_r])
-    
+
     velmap_average = np.swapaxes(vel_map_r_a, 0, 1)
     return velmap_average
 
-def plot_velocity_map(vel_map, aspect=.2, title="", 
+def plot_velocity_map(vel_map, aspect=.2, title="",
                       d="", vmin=-7.5, vmax=7.5, cadence=17, cmap="bwr"):
     """
     Plot a velocity map.
 
     Parameters
     ----------
-    vel_map : ndarray [n...]
+    vel_map : ndarray [n_slitsteps, n_timesteps]
         DESCRIPTION.
     aspect : TYPE, optional
         DESCRIPTION. The default is .2.
@@ -236,21 +312,21 @@ def plot_velocity_map(vel_map, aspect=.2, title="",
     None.
 
     """
-    
+
     vel_map = np.swapaxes(vel_map, 0, 1)
-    pl.figure(dpi=250)    
-    im1 = pl.imshow(vel_map - np.mean(np.ma.masked_invalid(vel_map)), 
-                    vmin=vmin, vmax=vmax, cmap=cmap, aspect=aspect, 
-                    extent=[0, vel_map.shape[1], 0, vel_map.shape[0]*cadence])
+    pl.figure(dpi=250)
+    im1 = pl.imshow(vel_map - np.mean(np.ma.masked_invalid(vel_map)),
+                    vmin=vmin, vmax=vmax, cmap=cmap, aspect=aspect,
+                    extent=[0, vel_map.shape[1]*0.167, 0, vel_map.shape[0]*cadence])
     pl.colorbar(im1, label="Doppler Velocity [km/s]", shrink=1)
-    pl.xlabel("Pixels across the slit")
+    pl.xlabel("Solar X [arcsec]")
     pl.ylabel("Time [s]")
     pl.title(title)
-    
+
     pl.savefig(d+title+".png", transparent=True)
     pl.show()
 
-def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="", 
+def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="",
                        d="", cadence=17):
     """
     Plot an intensity map out of an array.
@@ -278,9 +354,9 @@ def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="",
 
     """
     int_map = np.swapaxes(int_map, 0, 1)
-    pl.figure(dpi=250)    
-    im1 = pl.imshow(int_map, 
-                    vmin=vmin, vmax=vmax, cmap="plasma", aspect=aspect, 
+    pl.figure(dpi=250)
+    im1 = pl.imshow(int_map,
+                    vmin=vmin, vmax=vmax, cmap="plasma", aspect=aspect,
                     extent=[0, int_map.shape[1], 0, int_map.shape[0]*cadence])
     pl.colorbar(im1, label="Intensity [Arbitrary units]", shrink=1)
     pl.xlabel("Pixels across the slit")
@@ -289,7 +365,7 @@ def plot_intensity_map(int_map, aspect=.2, vmin=100, vmax=1000, title="",
     pl.savefig(d+title+".png", transparent=True)
 
     pl.show()
-    
+
 def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
                 remove_noise=False, freq_range=[]):
     """
@@ -322,19 +398,19 @@ def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
     None.
 
     """
-    
+
     pl.figure(dpi=250)
     Pxx_nx = Pxx.shape[0]
     if remove_noise == True:
         noise_est = np.array([np.amin(el[-5:-1]) for el in Pxx])
         print(noise_est)
         for el in range(Pxx_nx):
-            Pxx[el, :] -= noise_est[el] 
+            Pxx[el, :] -= noise_est[el]
     im1 = pl.imshow(np.log10(Pxx).T-3, vmin=vmina, vmax=vmaxa, aspect=aspect,
-                    extent=[0, Pxx.shape[0], freq[-1]*1e3, 0])
+                    extent=[0, Pxx.shape[0], 0, freq[-1]*1e3], origin="lower")
     pl.xlabel("Pixels along the slit")
     pl.ylabel("Frequency [mHz]")
-    
+
     pl.colorbar(im1, label="Log10[Acoustic power [(km/s)$^2$/mHz]",
                 shrink=.8)
     pl.title(title)
@@ -343,11 +419,11 @@ def plot_Pxx_2D(freq, Pxx, aspect=.2, title="", d="", vmina=-3, vmaxa=.5,
     pl.show()
 
 def calc_mask(v_array, dv):
-    
+
     len_x_data = v_array.shape[0]
-    
+
     mask = np.zeros(len_x_data)
-    
+
     for el in range(len_x_data):
         i = 0
         Flag = True
@@ -356,7 +432,7 @@ def calc_mask(v_array, dv):
                 Flag = False
                 break
         mask[el] = Flag
-    
+
     return mask
 
 def calc_Pxx_velmap(vel_map, fsi=1/17):
@@ -381,21 +457,21 @@ def calc_Pxx_velmap(vel_map, fsi=1/17):
     freq_test, Pxx_test = sp.signal.periodogram(vel_map[0, :], fs=fsi)
 
 
-    P_v_container = np.zeros((vel_map.shape[0], Pxx_test.shape[0])) 
+    P_v_container = np.zeros((vel_map.shape[0], Pxx_test.shape[0]))
 
     for el in range(P_v_container.shape[0]):
-        freq, P_v_container[el, :] = sp.signal.periodogram(vel_map[el, :], 
+        freq, P_v_container[el, :] = sp.signal.periodogram(vel_map[el, :],
                                                            fs=fsi)
-       
-    P_v_containerm = np.array([np.mean(np.ma.masked_invalid(el).compressed()) 
+
+    P_v_containerm = np.array([np.mean(np.ma.masked_invalid(el).compressed())
                             for el in np.swapaxes(P_v_container, 0, 1)])
-    
+
     return freq, P_v_container
 
 def load_data_series(filename, spec_line):
     """
     Load the spectrum for a spec_line from an IRIS lvl 2 data file
-    
+
     Parameters
     ----------
     filename : string
@@ -409,8 +485,8 @@ def load_data_series(filename, spec_line):
      TDESC4  = 'Si IV 1403'         /
      TDESC5  = '2832    '           /
      TDESC6  = '2814    '           /
-     TDESC7  = 'Mg II k 2796'       /          
- 
+     TDESC7  = 'Mg II k 2796'       /
+
     Returns
     -------
     spectrum : ndarray [ntime, n_dim_slit, n_wave]
@@ -419,23 +495,23 @@ def load_data_series(filename, spec_line):
     """
     hdu  = fits.open(filename)
     keys = hdu[0].header["TDESC*"]
-    
-    ii = 1 
-    
+
+    ii = 1
+
     while (keys[ii-1] != spec_line):
         ii+=1
-    
+
     spectrum = hdu[ii].data
     header   = hdu[ii].header
-    
-    return spectrum, header 
+
+    return spectrum, header
 
 
 def load_velocity_mg2(filename):
     """
-    Load and return the velocity and intensity signals from the .sav files 
+    Load and return the velocity and intensity signals from the .sav files
     produced from the find_mg2_features_lvl2 function:
-        
+
     Parameters
     ----------
     filename : string
@@ -446,28 +522,28 @@ def load_velocity_mg2(filename):
     Legend:
         n_line: == 0, Mg k line
                 == 1, Mg h line
-    
+
         n_prop: == 0, Doppler velocity [km/s]
                 == 1, Intensity [some units]
-            
+
         n_y: index along the slit
         n_t: time index
-        
+
     bp : ndarray (n_t, n_y, n_prop, n_line)
-        Blue wing (2v component) properties 
+        Blue wing (2v component) properties
     rp : ndarray (n_t, n_y, n_prop, n_line)
-        Red wing (2r component) properties 
+        Red wing (2r component) properties
     lc : ndarray (n_t, n_y, n_prop, n_line)
         Line center (3 component) properties .
 
     """
-    
+
     hdu = readsav(filename)
     rp = hdu["rp"]
     bp = hdu["bp"]
     lc = hdu["lc"]
-    
-    
+
+
     return bp, rp, lc
 
 
@@ -488,14 +564,14 @@ def correct_IRIS_noisy_series(timeSeries, dd):
         Corrected for the threshold timeseries.
 
     """
-    
+
     n_timesteps = timeSeries.shape[0]
     n_slitsteps = timeSeries.shape[1]
-    
+
     timeSeriesCorrected = timeSeries * 0.0 + 0.0
     timeSeriesCorrected[0] = timeSeries[0]
-    
-    
+
+
     for el in range(2, n_timesteps-2):
         if ((np.abs(timeSeries[el+1] - timeSeries[el]) > dd)
             or np.isnan(timeSeries[el+1]) == True):
@@ -504,7 +580,7 @@ def correct_IRIS_noisy_series(timeSeries, dd):
                                         #.5*(timeSeries[el] + timeSeries[el+2])
         else:
             timeSeriesCorrected[el+1] = timeSeries[el+1]
-    
+
     return timeSeriesCorrected
 
 
@@ -514,14 +590,14 @@ def correct_IRIS_noisy_maps(timeSeries, dt=15, dx=15):
 
     Parameters
     ----------
-    timeSeries : ndarray [n_timesteps]
-        DESCRIPTION.
+    timeSeries : ndarray [n_slitsteps, n_timesteps] 
+        Data; why did I order them like that???
     dt : float
         Threshold over which to interpolate over in the temporal dimension.
-    dx : float     
+    dx : float
         Threshold over which to interpolate over in the slit dimension.
-    
-     
+
+
 
     Returns
     -------
@@ -530,38 +606,39 @@ def correct_IRIS_noisy_maps(timeSeries, dt=15, dx=15):
 
     """
     
-    n_timesteps = timeSeries.shape[0]
-    n_slitsteps = timeSeries.shape[1]
-    
+    n_slitsteps = timeSeries.shape[0]
+    n_timesteps = timeSeries.shape[1]
+
     timeSeriesCorrected = timeSeries * 0.0 + 0.0
-    timeSeriesCorrected[0, :] = timeSeries[0, :]
-    
+    timeSeriesCorrected[:, 0] = timeSeries[:, 0]
+
     for xx in range(0, n_slitsteps-1):
         for el in range(0, n_timesteps-2):
-            if (np.abs(timeSeries[el+1, xx] - timeSeriesCorrected[el, xx]) > dt):                    
-                timeSeriesCorrected[el+1, xx] = np.median(timeSeries[el-3:el+3, xx-3:xx+3])
+            if (np.abs(timeSeries[xx, el+1] - timeSeriesCorrected[xx, el]) > dt):
+                timeSeriesCorrected[xx, el+1] = np.median(timeSeries[xx-3:xx+3, el-3:el+3])
             else:
-                timeSeriesCorrected[el+1, xx] = timeSeries[el+1, xx]
-    
+                timeSeriesCorrected[xx, el+1] = timeSeries[xx, el+1]
+
     for el in range(0, n_timesteps-1):
         for xx in range(0, n_slitsteps-2):
-            if (np.abs(timeSeries[el, xx+1] - timeSeriesCorrected[el, xx]) > dx):
-                timeSeriesCorrected[el, xx+1] = np.median(timeSeries[el-3:el+3, xx-3:xx+3])
+            if (np.abs(timeSeries[xx+1, el] - timeSeriesCorrected[xx, el]) > dx):
+                timeSeriesCorrected[xx+1, el] = np.median(timeSeries[xx-3:xx+3,
+                                                                     el-3:el+3,])
                                                 #- timeSeriesCorrected[el-1, xx])
             else:
-                timeSeriesCorrected[el, xx+1] = timeSeries[el, xx+1]
-    
-    
+                timeSeriesCorrected[xx+1, el] = timeSeries[xx+1, el]
+
+
     return timeSeriesCorrected
 
 def detrend_data(timeSeries, dd=2):
     """
-    Remove long-term trends from the data by removing a polynomial fit to the 
+    Remove long-term trends from the data by removing a polynomial fit to the
     data.
 
     Parameters
     ----------
-    timeSeries : 1d ndarray
+    timeSeries : ndarray [n_slitsteps, n_timesteps]
         Timeseries to be detrended.
     dd : int, optional
         Degree of the polynomial to be removed. The default is 2.
@@ -572,24 +649,24 @@ def detrend_data(timeSeries, dd=2):
         Detrended data.
 
     """
-    timeSeries = np.swapaxes(timeSeries, 0, 1)
-    dt = 3
+
     nx = timeSeries.shape[0]
     nt = timeSeries.shape[1]
 
-    
-    timeSeries_detrend = np.zeros((nx, nt-dt))
-    
+
+    timeSeries_detrend = np.zeros((nx, nt))
+
     for el in range(nx):
-        xx = np.linspace(0, nt-dt-1, num=nt-dt)
+        xx = np.linspace(0, nt-1, num=nt) #time coordinate for the fit
         try:
-            fit_fn = np.poly1d(np.polyfit(xx, timeSeries[el, :-3], dd))
-            timeSeries_detrend[el, :] = timeSeries[el, :-dt] - fit_fn(xx)
+            fit_fn = np.poly1d(np.polyfit(xx[10:-10], 
+                                          timeSeries[el, 10:-10], dd))
+            timeSeries_detrend[el, :] = timeSeries[el, :] - fit_fn(xx)
         except:
             mean_timeSeries = np.nanquantile(timeSeries[el, :], 0.5)
             timeSeries_detrend[el, :] -= mean_timeSeries
     return timeSeries_detrend
- 
+
 def find_lag(timeSeries1, timeSeries2):
     """
     Calculate what is the lag between two time series based on their xcorrela-
@@ -597,7 +674,7 @@ def find_lag(timeSeries1, timeSeries2):
 
     Parameters
     ----------
-    timeSeries1 : ndarray [Nt] 
+    timeSeries1 : ndarray [Nt]
         Timeseries 1
     timeSeries2 : ndarray [Nt]
         Timeseries 2
@@ -608,11 +685,11 @@ def find_lag(timeSeries1, timeSeries2):
         Lag between the two timeseries [measured in indices]
 
     """
-    
+
     cor = correlate(timeSeries1, timeSeries2, mode="same")
     lag = np.argmax(cor)
     time_lag = lag - len(timeSeries1)/2
-    
+
     return time_lag
 
 def convert_cart_to_polar(x, y):
@@ -634,13 +711,13 @@ def convert_cart_to_polar(x, y):
         DESCRIPTION.
 
     """
-    
+
     r     = np.sqrt(x*x + y*y)
     if y > 0:
         theta = np.arccos(x/r)
     else:
         theta = -1 * np.arccos(x/r)
-  
+
     return r, theta
 
 def convert_polar_to_cart(coords):
@@ -654,7 +731,7 @@ def angle_mean(angles):
     """
     Calculate the mean of a distribution of angles
     using the unit circle averaging.
-    
+
     Parameters
     ----------
     angles : ndarray [num_angles]
@@ -666,29 +743,29 @@ def angle_mean(angles):
         The mean angle.
 
     """
-    
+
     num_angles = len(angles)
     r = np.ones(num_angles)
-    
-    xy_array = [convert_polar_to_cart(el) for el in 
+
+    xy_array = [convert_polar_to_cart(el) for el in
                 zip(r, angles)]
-    
+
     xy_array = np.array(xy_array)
     try:
         x_mean = np.mean(xy_array[:, 0])
         y_mean = np.mean(xy_array[:, 1])
-    
+
         r, mean_angle = convert_cart_to_polar(x_mean, y_mean)
-    except: 
+    except:
         mean_angle = 0
     return mean_angle
 
 
-def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0, 
+def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0,
                     use_cache=False):
     """
-    Compute the phase between two signals (timeSeries1 and timeSeries2) based 
-    on their coherence on Morlet wavelet analysis. Tailored for IRIS level 2 
+    Compute the phase between two signals (timeSeries1 and timeSeries2) based
+    on their coherence on Morlet wavelet analysis. Tailored for IRIS level 2
     data.
 
     Parameters
@@ -702,8 +779,8 @@ def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0,
     t0 : float, optional
         Starting time of the data. The default is 0.
     use_cache: bool, optional
-        Use cached estimate for the red noise level on the first iteration. 
-        Default set to False, as for new data series you have to model the 
+        Use cached estimate for the red noise level on the first iteration.
+        Default set to False, as for new data series you have to model the
         red noise level separately.
 
     Returns
@@ -735,7 +812,7 @@ def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0,
         var_timeSeries2 = std_timeSeries2 ** 2  # Variance
         timeSeries2_norm =timeSeries2_ex / std_timeSeries2  # Normalized dataset
 
-        t1 = t2 = np.linspace(0, timeSeries1_ex.size - 1, 
+        t1 = t2 = np.linspace(0, timeSeries1_ex.size - 1,
                               num=timeSeries1_ex.size)*dt
 
         mother = wavelet.Morlet(6)
@@ -747,12 +824,12 @@ def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0,
             alpha, _, _ = wavelet.ar1(timeSeries1_norm)  # Lag-1 autocorrelation for red noise
 
 
-            WCT, aWCT, cor_coi, freq, sig = wavelet.wct(timeSeries1_norm, 
-                                                         timeSeries2_norm, 
-                                                         dt, dj=1/12, 
+            WCT, aWCT, cor_coi, freq, sig = wavelet.wct(timeSeries1_norm,
+                                                         timeSeries2_norm,
+                                                         dt, dj=1/12,
                                                          s0=s0, J=-1,
                                                          significance_level=0.8646,
-                                                         wavelet='morlet', 
+                                                         wavelet='morlet',
                                                          normalize=True,
                                                          cache=use_cache)
 
@@ -761,7 +838,7 @@ def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0,
             cor_sig_all[:, :, el] = cor_sig
             use_cache=True
             angles[:, :, el] = aWCT
-            
+
             coi_mask = make_coi_mask(freq, cor_coi)
         except:
              print(f"Iteration {el} didn't find an AR model to fit the data")
@@ -772,22 +849,22 @@ def calc_phase_diff(timeSeries1, timeSeries2, dt=16.7, t0=0,
     # upwards (N), anti-phase signals point downwards (S). If X leads Y,
     # arrows point to the right (E) and if X lags Y, arrow points to the
     # left (W).
-            
+
 
     return angles, cor_sig_all, freq, coi_mask
 
 
 def make_coi_mask(freq, cor_coi):
     """
-    Make a mask for the cone of influence that can be applied to the measured 
-    quantities from the 
+    Make a mask for the cone of influence that can be applied to the measured
+    quantities from the
 
     Parameters
     ----------
     freq : ndarray [num_freq]
         Frequency array
     cor_coi : ndarray [num_time]
-        Cone of influence 
+        Cone of influence
 
     Returns
     -------
@@ -796,61 +873,217 @@ def make_coi_mask(freq, cor_coi):
 
     """
     num_freq = freq.size
-    num_time = cor_coi.size 
-    
+    num_time = cor_coi.size
+
     coi_mask = np.zeros((num_freq, num_time))
-    
+
     for ii in range(num_time):
         min_freq = 1/cor_coi[ii]
         jj = 0
         while freq[jj] > min_freq:
             coi_mask[jj, ii] = 1
             jj += 1
-    
+
     return coi_mask
 
 def filter_CII_data(spectral_map, kernel_size=3):
     '''
-    Filter out a dopplergram following the Rathore and Carlsson, 2015, ApJ, 
-    method. Intended to be used for filtering out the C II IRIS rasters. 
-    
-    s_filt = 1) if sigma_s > sigma -> (sigma/sigma_s)^2 * m_s 
+    Filter out a dopplergram following the Rathore and Carlsson, 2015, ApJ,
+    method. Intended to be used for filtering out the C II IRIS rasters.
+
+    s_filt = 1) if sigma_s > sigma -> (sigma/sigma_s)^2 * m_s
                                       + (1 - (sigma/sigma_s)^2) * m_s
              2) if sigma_s < sigma -> m_s
-    
+
 
     Parameters
     ----------
     spectral_map : ndarray [numSlitLoc, numWaves]
         Raw spectral map input.
-    kernel_size: int 
-        Kernel size for the averaging window. 
+    kernel_size: int
+        Kernel size for the averaging window.
     Returns
     -------
     spectral_map_filted : ndarray [numSlitLoc, numWaves]
         Filtered spectral map output.
     '''
-    
-    d_x = (kernel_size - 1) // 2                        #  kernel halfwidth 
+
+    d_x = (kernel_size - 1) // 2                        #  kernel halfwidth
     size_X = spectral_map.shape[0]
     size_Y = spectral_map.shape[1]
-    
-    mean_spectrum = np.array([[np.mean(spectral_map[i-d_x:i+d_x, j-d_x:j+d_x]) 
-                               for i in range(1, size_X-1)] 
+
+    mean_spectrum = np.array([[np.mean(spectral_map[i-d_x:i+d_x, j-d_x:j+d_x])
+                               for i in range(1, size_X-1)]
                                for j in range(1, size_Y-1)]).T
-    
-    var_spectrum = np.array([[np.var(spectral_map[i-d_x:i+d_x, j-d_x:j+d_x]) 
-                              for i in range(1, size_X-1)] 
+
+    var_spectrum = np.array([[np.var(spectral_map[i-d_x:i+d_x, j-d_x:j+d_x])
+                              for i in range(1, size_X-1)]
                               for j in range(1, size_Y-1)]).T
     var_ave = np.mean(var_spectrum)
-    
+
     velocity_map_filter = np.zeros((size_X, size_Y))
-    
+
     var_norm = var_ave / var_spectrum
-    
-    velocity_map_filter = (var_norm * mean_spectrum 
+
+    velocity_map_filter = (var_norm * mean_spectrum
                            + (1 - var_norm) * spectral_map[1:-1, 1:-1])
     low_SNR_region = np.where(var_spectrum < var_ave)
     velocity_map_filter[low_SNR_region] = mean_spectrum[low_SNR_region]
-    
+
     return velocity_map_filter
+
+def calc_phase_diff_full(timeSeries1, timeSeries2, dt=16.7, t0=0,
+                         d0 = 72, d1 = 123,
+                         use_cache=True):
+    """
+    Compute the phase between two signals (timeSeries1 and timeSeries2) based
+    on their coherence on Morlet wavelet analysis. Tailored for IRIS level 2
+    data.
+
+    Parameters
+    ----------
+    timeSeries1 : ndarray [num_tSteps, num_samples]
+        Timeseries 1
+    timeSeries2 : ndarray [num_tSteps, num_samples]
+        Timeseries 2
+    dt : float, optional
+        Cadence of the data. The default is 16.7 [s].
+    t0 : float, optional
+        Starting time of the data. The default is 0.
+    d0: float, optional
+        Number of frequency resolution points of the data;
+    d1: float, optional
+        Number of temporal resolution points of the data;
+    use_cache: bool, optional
+        Use cached estimate for the red noise level on the first iteration.
+        Default set to False, as for new data series you have to model the
+        red noise level separately.
+
+    Returns
+    -------
+    WCT: ndarray [N_freq, N_temporal]
+        Coherency of the wavelet transform;
+    angles : ndarray [N_freq, N_temporal]
+        Phase delay angles between the diagnostics.
+    cor_sig_all : ndarray [N_freq, N_temporal]
+        Regions of significance
+    freq : float
+        Frequencies of the transformed region.
+
+    """
+
+    angles = np.zeros((d0, d1, timeSeries1.shape[1]))
+    cor_sig_all = np.zeros((d0, d1, timeSeries1.shape[1]))
+    WCT    = np.zeros((d0, d1, timeSeries1.shape[1]))
+    freq   = np.zeros((timeSeries1.shape[1]))
+    coi_mask = np.zeros((timeSeries1.shape[1]))
+
+    N = timeSeries1.shape[0]
+    
+    try:
+        t = np.arange(0, N) * dt + t0
+
+        timeSeries1_ex = timeSeries1[:, 10]
+        std_timeSeries1 = timeSeries1_ex.std()  # Standard deviation
+        var_timeSeries1 = std_timeSeries1 ** 2  # Variance
+        timeSeries1_norm = timeSeries1_ex / std_timeSeries1  # Normalized dataset
+
+        timeSeries2_ex = timeSeries2[:, 10]
+        std_timeSeries2 = timeSeries2_ex.std()  # Standard deviation
+        var_timeSeries2 = std_timeSeries2 ** 2  # Variance
+        timeSeries2_norm =timeSeries2_ex / std_timeSeries2  # Normalized dataset
+
+        t1 = t2 = np.linspace(0, timeSeries1_ex.size - 1,
+                              num=timeSeries1_ex.size)*dt
+
+        mother = wavelet.Morlet(6)
+        s0 = 2 * dt  # Starting scale, in this case 2 * 0.25 secondss = 6 months
+        dj = 1 / 12  # Twelve sub-octaves per octaves
+        J = 7 / dj  # Seven powers of two with dj sub-octaves
+        print(timeSeries1_ex.shape)
+        WCTt, aWCT, cor_coi, freq, sig = wavelet.wct(timeSeries1_norm,
+                                                     timeSeries2_norm,
+                                                     dt, dj=1/12,
+                                                     s0=s0, J=-1,
+                                                     significance_level=0.8646,
+                                                     wavelet='morlet',
+                                                     normalize=True,
+                                                     cache=False)
+    except:
+        print("Pick a better reference spectrum")        
+
+    for el in range(0, timeSeries1.shape[1]-2):
+        print(el)
+        t = np.arange(0, N) * dt + t0
+
+        timeSeries1_ex = timeSeries1[:, el]
+        std_timeSeries1 = timeSeries1_ex.std()  # Standard deviation
+        var_timeSeries1 = std_timeSeries1 ** 2  # Variance
+        timeSeries1_norm = timeSeries1_ex / std_timeSeries1  # Normalized dataset
+
+        timeSeries2_ex = timeSeries2[:, el]
+        std_timeSeries2 = timeSeries2_ex.std()  # Standard deviation
+        var_timeSeries2 = std_timeSeries2 ** 2  # Variance
+        timeSeries2_norm =timeSeries2_ex / std_timeSeries2  # Normalized dataset
+
+        t1 = t2 = np.linspace(0, timeSeries1_ex.size - 1,
+                              num=timeSeries1_ex.size)*dt
+
+        mother = wavelet.Morlet(6)
+        s0 = 2 * dt  # Starting scale, in this case 2 * 0.25 secondss = 6 months
+        dj = 1 / 12  # Twelve sub-octaves per octaves
+        J = 7 / dj  # Seven powers of two with dj sub-octaves
+        print(timeSeries1_ex.shape)
+        try:
+            alpha, _, _ = wavelet.ar1(timeSeries1_norm)  # Lag-1 autocorrelation for red noise
+
+
+            WCTt, aWCT, cor_coi, freq, sig = wavelet.wct(timeSeries1_norm,
+                                                         timeSeries2_norm,
+                                                         dt, dj=1/12,
+                                                         s0=s0, J=-1,
+                                                         significance_level=0.8646,
+                                                         wavelet='morlet',
+                                                         normalize=True,
+                                                         cache=True)
+
+            cor_sig = np.ones([1, timeSeries1_ex.size]) * sig[:, None]
+            cor_sig = np.abs(WCT) / cor_sig  # Power is significant where ratio > 1
+            cor_sig_all[:, :, el] = cor_sig
+            use_cache=True
+            angles[:, :, el] = aWCT
+            WCT[:, :, el] = WCTt
+            coi_mask = make_coi_mask(freq, cor_coi)
+        except:
+             print(f"Iteration {el} didn't find an AR model to fit the data")
+
+    # Calculates the phase between both time series. The phase arrows in the
+    # cross wavelet power spectrum rotate clockwise with 'north' origin.
+    # The relative phase relationship convention is the same as adopted
+    # by Torrence and Webster (1999), where in phase signals point
+    # upwards (N), anti-phase signals point downwards (S). If X leads Y,
+    # arrows point to the right (E) and if X lags Y, arrow points to the
+    # left (W).
+
+
+    return WCT, angles, cor_sig_all, freq, coi_mask
+
+
+def running_av_mu(pd, mu):
+    num_mu_points = len(mu)
+    
+    average_data = np.zeros((num_mu_points, 2))
+    
+    average_data[:, 0] = mu
+    average_data[0, 1] = np.mean(pd.loc[pd.mu < np.mean(mu[0:2])].v_rms)
+    
+    for el in range(1, num_mu_points):
+        average_data[el, 1] = np.median(pd.loc[(pd.mu 
+                                              > np.mean(mu[el-1:el+1]))
+                                             & (pd.mu 
+                                                < np.mean(mu[el:el+2]))].v_rms)
+    while (el < average_data.shape[0]):
+        if average_data[el, 1] < 0.001:
+            average_data = np.delete(average_data, el, axis=0)
+        el = el + 1
+    return average_data
